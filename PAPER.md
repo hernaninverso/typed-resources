@@ -201,6 +201,15 @@ visible-output bound on Azure-reasoning / Anthropic-interleaved.
 We prove safety (the bound holds on every trace) and, for this fragment, progress + strong
 normalization (§5).
 
+*Two equivalent presentations.* The on-paper development below uses the **relational** judgment
+`p ⊢ e:⋄;p′` (potential `p` in, residual `p′` out). The Lean mechanization uses the equivalent
+**functional** presentation: a closed-form `pot : Expr → ℕ` (the minimal potential the rules consume)
+plus a `WellTyped` side-condition for `delegate`, with `HasCost e b := pot e ≤ b` and residual
+`r = b − pot e`. The two agree rule-by-rule — `pot` is exactly what the residual rules compute — so a
+proof in either transfers; we mechanize the functional one because it makes the induction a direct
+credit (`gas + pot`) invariant. Lemmas 0–2 below are the relational-side justification of that
+equivalence.
+
 ### 4.1 Lemma 1 (weakening — raise the input)
 If `p ⊢ e:⋄;p′` then `p+r ⊢ e:⋄;p′+r` for all `r ≥ 0`. *Proof:* induction on the derivation; each
 rule passes the extra `r` from incoming to residual. ∎
