@@ -1,7 +1,7 @@
-# A Potential-Based Calculus for Resource Bounds of LLM-Agent Workflows
+# A Lean-Checked Potential Calculus for Bounded-Cost LLM-Agent Workflows: A Sequential Core
 
 **Hernán Inverso**
-*Preprint, v2.7 — 12 June 2026*
+*Preprint, v3 — 12 June 2026*
 
 > Relation to Khan [2606.04056] (stated up front to avoid any overclaim; **verified verbatim against
 > the paper body**). Khan gives an empirical catalogue of 63 budget-overrun incidents and an **affine
@@ -18,9 +18,9 @@
 > instantiation to the agent-workflow / per-call-cap setting** plus the billing analysis — not a new
 > proof method. It covers the aggregate accounting Khan establishes only via Proposition 1 + empirics.
 > We **do not** address the binary-level gap, and
-> we **mechanize the core no-double-spend property** of Khan's ownership as a separate affine Lean
-> layer (§8, `no_double_spend`) — a faithful but deliberately thin affine discipline, *not* the full
-> borrow apparatus (no explicit ownership context, move, or aliasing; those are roadmap). Both works
+> we mechanize a **thin affine no-double-spend ledger invariant** (§8, `no_double_spend`) inspired by
+> the ownership issue Khan targets — *not* the full borrow apparatus (no explicit ownership context,
+> move, or aliasing; those are roadmap). Both works
 > leave the binary-level gap open.
 
 ---
@@ -32,9 +32,12 @@ are *runtime* and *fallible*: a per-call cap exists, but the *project-level* bud
 (OpenAI's project budget now warns rather than halts; Azure recommends "implement your own logic"),
 and nothing bounds the **aggregate** across many capped calls — a single in-budget call can still
 push a multi-step run over its total after it completes. We give a small **affine calculus with numeric
-potential** over ⟨tokens, calls, $⟩, in the style of Hofmann–Jost Automatic Amortized Resource
+potential**, in the style of Hofmann–Jost Automatic Amortized Resource
 Analysis (AARA), with seven constructs mirroring real frameworks and a delegation rule whose linear
-potential split is adapted from resource-aware session types. Our **machine-checked (Lean 4)
+potential split is adapted from resource-aware session types. This is a **deliberately small
+sequential core**: one resource in the mechanized metatheory (rules are parameterized pointwise over
+a resource vector ⟨tokens, calls, $⟩, but the mechanized instance is k=1), integer costs, no
+concurrency/retry/expected-cost. Our **machine-checked (Lean 4)
 cost-soundness theorem** states that a well-typed workflow's accumulated gas never exceeds its
 declared potential at *every reachable configuration* — a safety invariant **proved without assuming
 termination** (so it covers every finite prefix; the same argument would carry to non-terminating
@@ -43,21 +46,23 @@ and degrades for others. For the presented weak fragment we additionally prove p
 normalization,
 upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P tokens" (under the cap axiom
 and a declared-window assumption on re-sent context) — a liveness-flavored property no kill-switch
-provides. We additionally mechanize the
-**affine no-double-spend property** (§8): a separate Lean development proving each context handle is
-spent at most once on every trace (`no_double_spend`, axioms `[propext]`) — the core of the ownership
-half Khan leaves to the borrow checker (a faithful but thin affine discipline, not a full borrow
-system). We are explicit about scope: the metatheory is a deliberately minimal fragment (one resource,
-integer costs, no concurrency, no expected-cost; the two layers compose but are not fused; the affine
-layer has no explicit ownership context/move/aliasing); the rest is roadmap (§8). Finally we
-contribute a **per-provider billing analysis** absent from prior work: the operational axiom that a
-per-call cap is a hard *billing* ceiling on output (including hidden reasoning tokens) is
-**parameter-specific, not provider-specific**. It holds for OpenAI Responses (`max_output_tokens`),
-Azure/OpenAI reasoning (`max_completion_tokens` — reasoning tokens are inside `completion_tokens`),
-and Anthropic standard (`budget_tokens < max_tokens`), but **degrades** for Anthropic
-interleaved/adaptive thinking (budget may exceed `max_tokens`) and Gemini when `maxOutputTokens` is
-set without pinning the separate `thinkingBudget` (§3.2, primary docs). Consequently we certify
-in tokens/tool-calls (stable) and map to dollars only where the axiom holds.
+provides. A separate Lean file additionally mechanizes a **minimal affine ledger invariant**
+corresponding to the no-double-spend core (`no_double_spend`, axioms `[propext]`); full borrow-style
+ownership (context, move, aliasing) — the discipline Khan targets with the Rust borrow checker —
+remains future work. We then contribute a **per-provider billing analysis** (the most practically
+useful part): the operational axiom that a per-call cap is a hard *billing* ceiling on output
+(including hidden reasoning tokens) is **parameter-specific, not provider-specific**. It holds for
+OpenAI Responses (`max_output_tokens`), Azure/OpenAI reasoning (`max_completion_tokens` — reasoning
+tokens are inside `completion_tokens`), and Anthropic standard (`budget_tokens < max_tokens`), but
+**degrades** for Anthropic interleaved/adaptive thinking (budget may exceed `max_tokens`) and Gemini
+when `maxOutputTokens` is set without pinning the separate `thinkingBudget` (§3.2, primary docs).
+Finally, the calculus is realized as **`gasket`, an open-source static checker**, and validated by an
+**empirical study of 254 real agent workflows** from 45 public repositories (§6): 76% map onto the
+calculus and 88% of cyclic workflows rely on a *framework default* (often a vacuous 1000-superstep
+LangGraph limit) for their only budget bound. To our knowledge this is the **first Lean-mechanized
+aggregate cost-soundness theorem specialized to per-call-capped LLM-agent workflows**; the proof
+technique is textbook AARA, the contribution is the instantiation, the provider-billing semantics,
+and the tool + study.
 
 ## 1. Introduction
 
@@ -177,6 +182,20 @@ here. In T-If both branches are typed from the **same** input `p`; the residual 
 (worst residual) and the cost is `b_{if} = max(b_{e₁}, b_{e₂})` (worst branch). The cost `b` in
 T-Loop is well-defined because, with exact rules, every typable `e` has a unique cost `b_e = pot(e)`
 independent of the incoming potential (Lemma 0, now immediate by induction).
+
+**Worked example.** A research agent: call the model, loop three times over (tool + model), then
+branch into either a delegated sub-agent or a cheap finish:
+```
+research = call(4000) ;
+           loop(3, tool(1000) ; call(2000)) ;
+           if (delegate(3000, call(2500))) (call(1200))
+```
+`pot(research) = 4000 + 3·(1000+2000) + max(3000, 1200) = 4000 + 9000 + 3000 = 16000`.
+By §4.4, **every execution of `research` consumes ≤ 16000 units** (tokens, under the cap axiom).
+A typing budget of `p = 16000` types it with residual 0; `p = 15999` is rejected at check time.
+Replace `loop(3,·)` with a fuel-free `loop(·)` ("retry until done") and it does not type at all —
+the runaway is a static error, not a runtime overspend. This is exactly what the `gasket` checker
+(§6) computes over real LangGraph/CrewAI graphs.
 
 ## 3. Instrumented semantics and the billing axiom
 
@@ -383,6 +402,24 @@ its core form (§8, `no_double_spend`).
 The seven constructs type annotations developers already write; a checker enters as a *linter over
 existing config*, not a language to adopt. (`par` is roadmap, marked †; it is not in the calculus.)
 
+**`gasket`: implementation + empirical study.** The calculus is realized as an open-source static
+checker, `gasket` (Apache-2.0; pure AST, never executes the analysed code). We ran it over a frozen
+corpus of **254 unique agent-workflow graphs** harvested from **45 public, production-grade
+repositories** (≥10★ or CI/tests, anti-tutorial filtered, structurally de-duplicated). Findings,
+under a pre-registered taxonomy:
+
+| Outcome | Share | Reading |
+|---|---|---|
+| maps onto the calculus (certifiable + default-dependent + rejected) | **76%** | the sequential core covers the bulk of real graph structure |
+| of *cyclic* workflows: bound is only a framework default, or absent | **88%** | most "protected" loops rely on a default — often a **vacuous 1000-superstep** LangGraph limit (v1.0.6+) |
+| LLM calls with an explicit token cap | **12%** | dollar bounds need cap inference (a `gasket caps` feature) |
+| outside the calculus (`Send` fan-out, interrupts, hierarchical, dynamic goto, subgraph-as-node) | the rest | the empirically-ranked roadmap for the calculus (§8) |
+
+*Disclosure (the study's own limits):* ~80% LangGraph (CrewAI/Agents-SDK samples small); ~5.6
+units/repo clustering; public-GitHub visibility bias; LangGraph version assumed ≥1.0.6 where
+undeclared. This is the kind of evidence — a tool plus a measured corpus — that grounds the framing
+rather than asserting it; the gap inventory is the calculus's roadmap, not a hidden weakness.
+
 ## 7. Related work
 
 - **Khan [2606.04056]** (Jun 2026): 63-incident catalogue + affine (Rust) mitigation; source-level
@@ -390,7 +427,8 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
   bound is Proposition 1 (conditional on estimator assumption A1) + empirical validation (382 live
   sessions), not a proof; **binary-level** soundness left open (Conjecture 1). *We give a
   machine-checked, operational cost-soundness via potential; we do not touch the binary gap, and our
-  affine layer (§8) mechanizes the core of his no-double-spend (thin discipline; full ownership is roadmap).*
+  affine layer (§8) mechanizes a thin no-double-spend ledger invariant inspired by the ownership issue
+  Khan targets (full borrow-style ownership is roadmap, not claimed here).*
 - **Graded / cost-aware type systems.** Resource-Bounded Type Theory [2512.06952] (Dec 2025) proves
   syntactic cost-soundness for a recursion-free fragment over an abstract resource lattice; its
   dependent MLTT variant [2601.10772]; `calf` [2107.04663]; RelCost;
@@ -405,6 +443,11 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
 - **The LLMbda calculus [2602.20064]** (Gordon, Sands, Feb 2026): λ-calculus for agentic programming
   with information-flow control. *Complementary (info-flow vs resources); LLMbda has no potential/
   grading, so budget-typing is not a free extension of it — integrating the two is roadmap (§8).*
+- **λA / typed agent-composition calculi** (2025–2026): typed calculi for LLM-agent composition with
+  bounded fixpoints, type safety, termination, and lint soundness. *Closest in spirit (a typed
+  calculus for agent composition with bounded loops); they target safety/termination of composition,
+  whereas we target a mechanized **aggregate cost** bound under an explicit per-call billing axiom.
+  The two are orthogonal and composable.*
 
 ## 8. The affine handle layer (no-double-spend), and roadmap
 
@@ -430,12 +473,12 @@ any trace**. `#print axioms no_double_spend` reports `[propext]` only (construct
 preservation invariant: each step keeps the remaining expression affine, its handles disjoint from
 the ledger, and the ledger duplicate-free.
 
-Together with §4, this mechanizes the *core* of both source-level guarantees: the aggregate cost
-bound (the half Khan leaves to Proposition 1 + empirics) *and* the affine no-double-spend property
-(the core of the half he leaves to the borrow checker). The aggregate-cost mechanization we believe
-is the first; the affine layer is a faithful but deliberately thin discipline, not a full borrow
-system. The two layers compose as a product judgment `p; Γ ⊢ e ⊣ p′; Γ′` (numeric potential `p` ×
-affine context `Γ`), each component independent.
+Alongside §4, this gives a machine-checked aggregate cost bound (the half Khan leaves to
+Proposition 1 + empirics) *and* a thin affine no-double-spend ledger invariant (a much smaller
+property than the full borrow-style ownership Khan enforces with Rust). The aggregate-cost
+mechanization specialized to per-call-capped agent workflows we believe is the first; the affine
+layer is deliberately minimal, not a full borrow system. The two layers compose as a product
+judgment `p; Γ ⊢ e ⊣ p′; Γ′` (numeric potential `p` × affine context `Γ`), each component independent.
 
 **Still roadmap:** promoting the affine layer to a **full ownership type system** — explicit context
 `Γ ⊢ e ⊣ Γ′` with membership checks on `useH`, move/borrow distinction, aliasing and handle allocation

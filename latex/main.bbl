@@ -1,0 +1,91 @@
+\begin{thebibliography}{10}
+
+\bibitem{agentcontracts2026}
+Agent contracts: A formal framework for resource-bounded autonomous {AI}
+  systems, 2026.
+\newblock arXiv:2601.08815. AAMAS 2026.
+
+\bibitem{carbonneaux2015}
+Quentin Carbonneaux, Jan Hoffmann, and Zhong Shao.
+\newblock Compositional certified resource bounds.
+\newblock In {\em Proceedings of the 36th ACM SIGPLAN Conference on Programming
+  Language Design and Implementation (PLDI 2015)}, pages 467--478. ACM, 2015.
+
+\bibitem{relcost2017}
+Ezgi {\c{C}}i{\c{c}}ek, Gilles Barthe, Marco Gaboardi, Deepak Garg, and Jan
+  Hoffmann.
+\newblock Relational cost analysis.
+\newblock In {\em Proceedings of the 44th ACM SIGPLAN Symposium on Principles
+  of Programming Languages (POPL 2017)}, pages 316--329. ACM, 2017.
+
+\bibitem{digitalcontracts2019}
+Ankush Das, Stephanie Balzer, Jan Hoffmann, Frank Pfenning, and Ishani
+  Santurkar.
+\newblock Resource-aware session types for digital contracts, 2019.
+\newblock arXiv:1902.06056. Also in IEEE CSF 2021.
+
+\bibitem{dhp2018}
+Ankush Das, Jan Hoffmann, and Frank Pfenning.
+\newblock Work analysis with resource-aware session types.
+\newblock In {\em Proceedings of the 33rd Annual ACM/IEEE Symposium on Logic in
+  Computer Science (LICS 2018)}, pages 305--314. ACM, 2018.
+
+\bibitem{llmbda2026}
+Andrew~D. Gordon and David Sands.
+\newblock The {LLMbda} calculus: A lambda-calculus for agentic programming with
+  information-flow control, 2026.
+\newblock arXiv:2602.20064.
+
+\bibitem{tale2024}
+Tingxu Han, Zhenting Wang, Chunrong Fang, Shiyu Zhao, Shiqing Ma, and Zhenyu
+  Chen.
+\newblock Token-budget-aware {LLM} reasoning, 2024.
+\newblock arXiv:2412.18547.
+
+\bibitem{aara2022}
+Jan Hoffmann and Steffen Jost.
+\newblock Two decades of automatic amortized resource analysis.
+\newblock {\em Mathematical Structures in Computer Science}, 32(6):729--759,
+  2022.
+
+\bibitem{hofmannjost2003}
+Martin Hofmann and Steffen Jost.
+\newblock Static prediction of heap space usage for first-order functional
+  programs.
+\newblock In {\em Proceedings of the 30th ACM SIGPLAN-SIGACT Symposium on
+  Principles of Programming Languages (POPL 2003)}, pages 185--197. ACM, 2003.
+
+\bibitem{khan2026}
+Sajjad Khan.
+\newblock Token budgets: An empirical catalog of 63 {LLM}-agent budget-overrun
+  incidents, with an affine-typed {R}ust mitigation as a case study, 2026.
+\newblock arXiv:2606.04056.
+
+\bibitem{ngo2018}
+Van~Chan Ngo, Quentin Carbonneaux, and Jan Hoffmann.
+\newblock Bounded expectations: Resource analysis for probabilistic programs.
+\newblock In {\em Proceedings of the 39th ACM SIGPLAN Conference on Programming
+  Language Design and Implementation (PLDI 2018)}, pages 496--512. ACM, 2018.
+
+\bibitem{calf2021}
+Yue Niu, Jonathan Sterling, Harrison Grodin, and Robert Harper.
+\newblock A cost-aware logical framework, 2021.
+\newblock arXiv:2107.04663. Also in Proc.\ ACM Program.\ Lang.\ 6(POPL), 2022.
+
+\bibitem{granule2019}
+Dominic Orchard, Vilem-Benjamin Liepelt, and Harley Eades~III.
+\newblock Quantitative program reasoning with graded modal types.
+\newblock {\em Proceedings of the ACM on Programming Languages},
+  3(ICFP):110:1--110:30, 2019.
+
+\bibitem{rbtt2025}
+Resource-bounded type theory: Compositional cost analysis via graded
+  modalities, 2025.
+\newblock arXiv:2512.06952.
+
+\bibitem{rbttmltt2026}
+Resource-bounded {M}artin-l\"{o}f type theory: Compositional cost analysis for
+  dependent types, 2026.
+\newblock arXiv:2601.10772.
+
+\end{thebibliography}
