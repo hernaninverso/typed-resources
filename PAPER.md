@@ -1,7 +1,7 @@
 # A Potential-Based Calculus for Resource Bounds of LLM-Agent Workflows
 
 **Hernán Inverso** · INVERSO HUB S.R.L. / CONICET
-*Preprint, draft v1 — 12 June 2026*
+*Preprint, v2.7 — 12 June 2026*
 
 > Relation to Khan [2606.04056] (stated up front to avoid any overclaim; **verified verbatim against
 > the paper body**). Khan gives an empirical catalogue of 63 budget-overrun incidents and an **affine
@@ -124,7 +124,7 @@ metatheory, and expected-cost are roadmap (§8), not claimed.
 | resources | one budget | abstract lattice (time/mem/gas) | **⟨tokens, calls, $⟩ tuple** |
 | delegation | — | — | **compositional split (session-type style)** |
 | LLM coupling | dollar cap, no reasoning models | none (general resources) | **cap axiom + per-provider billing + framework map** |
-| left open | binary-level soundness (Conjecture 1) | recursion | concurrency, affine layer, expected-cost |
+| left open | binary-level soundness (Conjecture 1) | recursion | concurrency, full ownership (Γ/move/aliasing), layer fusion, expected-cost |
 
 Our novelty is the *coupling* of amortized potential to the agent setting — the cap axiom, the
 ⟨tokens,calls,$⟩ tuple, compositional delegation, and the per-provider billing analysis — not the
@@ -134,8 +134,8 @@ potential method itself, which we reuse from AARA.
 
 We present the fragment used in the metatheory: a single resource, integer costs, *pure numeric
 potential* `p ∈ ℕ` (no affine context Γ). The vector form replaces ℕ by ℕᵏ and `≥`/`−` pointwise; all
-rules are unchanged. The affine *handle* layer that yields no-double-spend (Khan's ownership,
-formalized) is an extension (§8); we keep the base case minimal so the theorem is checkable.
+rules are unchanged. The affine *handle* layer that yields no-double-spend is a separate calculus,
+mechanized in its core form in §8; we keep this base case minimal so the theorem is checkable.
 
 **Syntax.**
 ```
@@ -240,8 +240,8 @@ normalization (§5).
 *Two equivalent presentations.* The on-paper development below uses the **relational** judgment
 `p ⊢ e:⋄;p′` (potential `p` in, residual `p′` out). The Lean mechanization uses the equivalent
 **functional** presentation: a closed-form `pot : Expr → ℕ` (the minimal potential the rules consume)
-plus a `WellTyped` side-condition for `delegate`, with `HasCost e b := pot e ≤ b` and residual
-`r = b − pot e`. The two agree rule-by-rule — `pot` is exactly what the residual rules compute — so a
+plus a `WellTyped` side-condition for `delegate`; a budget `b` suffices iff `pot e ≤ b`, with residual
+`b − pot e`. The two agree rule-by-rule — `pot` is exactly what the residual rules compute — so a
 proof in either transfers; we mechanize the functional one because it makes the induction a direct
 credit (`gas + pot`) invariant. Lemmas 0–2 below are the relational-side justification of that
 equivalence.
@@ -342,9 +342,10 @@ the §3 typing rules to `pot` is no longer on paper; (3) **the §5 termination m
 `step_decreases : Step e g e' g' → Lex e' e`, i.e. every operational step strictly decreases the
 lexicographic `(Wm, Sz)` — the load-bearing content of strong normalization. `steps_sound` and
 `hastype_iff_pot` use only `[propext, Quot.sound]` (constructive); `step_decreases` additionally uses
-`Classical.choice`. Still **pen-and-paper**: the final step from `step_decreases` to "no infinite
+`Classical.choice`; the affine layer's `no_double_spend` (in `lean/Affine.lean`) uses `[propext]`.
+Still **pen-and-paper**: the final step from `step_decreases` to "no infinite
 reduction" (standard well-foundedness of `<ₗₑₓ` on ℕ×ℕ), progress, the multi-resource vector, the
-affine layer, and the §3.2 billing facts. So the "*completes* within budget" upgrade now rests on a
+fusion of the two layers, and the §3.2 billing facts. So the "*completes* within budget" upgrade now rests on a
 mechanized measure-decrease plus a standard well-foundedness step; the headline *mechanized* guarantee
 remains the safety bound "never *spends* more than the declared potential."
 
@@ -366,9 +367,9 @@ possibly mid-task. The type gives more, *ahead of time*:
   axiom's billing form. We therefore state the guarantee in tokens/tool-calls, conditional on (i)–(ii).
 
 *What the fragment does not give.* No-double-spend of a context resource is not a consequence of the
-pure-potential rules; it needs affine handles with linear context split (the ownership discipline
-Khan enforces via the Rust borrow checker, pen-and-paper; §8). We flag this to avoid over-claiming:
-that orthogonal property is exactly what Khan's affine layer targets, and our §8 sketch recovers it.
+pure-potential rules; it needs affine handles with linear split. That orthogonal property is exactly
+what Khan's affine layer targets — and what our separate `lean/Affine.lean` development mechanizes in
+its core form (§8, `no_double_spend`).
 
 ## 6. Mapping to frameworks: the checker is a linter, not a new DSL
 
@@ -389,7 +390,7 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
   bound is Proposition 1 (conditional on estimator assumption A1) + empirical validation (382 live
   sessions), not a proof; **binary-level** soundness left open (Conjecture 1). *We give a
   machine-checked, operational cost-soundness via potential; we do not touch the binary gap, and our
-  affine layer (§8) recovers his no-double-spend.*
+  affine layer (§8) mechanizes the core of his no-double-spend (thin discipline; full ownership is roadmap).*
 - **Graded / cost-aware type systems.** Resource-Bounded Type Theory [2512.06952] (Dec 2025) proves
   syntactic cost-soundness for a recursion-free fragment over an abstract resource lattice; its
   dependent MLTT variant [2601.10772]; `calf` [2107.04663]; RelCost;
@@ -449,14 +450,16 @@ information-flow + resource type system.
 ---
 
 *Artifacts. (1) A **Lean 4 mechanization** (`lean/TypedResources.lean`, self-contained, no Mathlib,
-Lean v4.30.0) of the calculus and the §4 theorem, stated as*
+Lean v4.30.0) of the calculus: the §4 theorem*
 `steps_sound : Steps e 0 e′ g′ → WellTyped e → g′ ≤ pot e`
-*— a well-typed workflow from zero gas spends `g′ ≤ pot e` on every reachable configuration
-(partial or divergent), where `Step.call`/`Step.tool` encode the cap axiom `a ≤ c`. It is proved
-via the single-step credit invariant `step_sound` and its transitive lift `steps_credit`.*
+*(a well-typed workflow from zero gas spends `g′ ≤ pot e` at every reachable configuration — every
+finite prefix of any trace — where `Step.call`/`Step.tool` encode the cap axiom `a ≤ c`; proved via
+the single-step credit invariant `step_sound` and its transitive lift `steps_credit`), plus the
+Lemma 0 equivalence `hastype_iff_pot` and the §5 measure decrease `step_decreases`.*
 `#print axioms steps_sound` *reports only `[propext, Quot.sound]` — Lean's two foundational kernel
 axioms; no `sorryAx`, no `Classical.choice`, so the proof is constructive. This is the
-machine-checked claim. (2) A Python sanity harness (`check.py`) on a fixed 5-program battery, which
+machine-checked claim. (2) The **affine layer** (`lean/Affine.lean`): `no_double_spend`, axioms
+`[propext]` (§8). (3) A Python sanity harness (`check.py`) on a fixed 5-program battery, which
 (i) confirms the no-fuel runaway loop does not type, (ii) confirms sequential delegation
 conservation, and (iii) reports zero `g ≤ p` violations over random cost assignments. Note (ii)–(iii)
 only test that the executable rules agree with the paper: the generator enforces `a ≤ c` by
