@@ -2,3 +2,6 @@
 *.log
 *.out
 __pycache__/
+latex/*.blg
+latex/*.aux
+latex/*.log

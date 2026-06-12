@@ -8,7 +8,8 @@ layer. Companion static checker: **[gasket](https://github.com/hernaninverso/gas
 
 - **Paper (PDF + DOI):** https://doi.org/10.5281/zenodo.20661092
 - **`lean/TypedResources.lean`** — `steps_sound`, `hastype_iff_pot`, `step_decreases` (axioms `[propext, Quot.sound]`, no `sorry`)
+- **`lean/TypedResourcesVec.lean`** — `vsteps_sound`: the same cost-soundness theorem for an **arbitrary-dimension resource vector** `Fin k → ℕ` (k=3 is ⟨tokens, calls, $⟩), axioms `[propext, Quot.sound]`, no `sorry`
 - **`lean/Affine.lean`** — `no_double_spend` (axioms `[propext]`)
-- **`PAPER.md`** — full preprint source
+- **`PAPER.md`** — full preprint source (v4)
 
-Build: `lean lean/TypedResources.lean && lean lean/Affine.lean` (Lean v4.30.0, no Mathlib).
+Build: `lean lean/TypedResources.lean && lean lean/TypedResourcesVec.lean && lean lean/Affine.lean` (Lean v4.30.0, no Mathlib).

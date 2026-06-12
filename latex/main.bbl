@@ -88,4 +88,9 @@ Resource-bounded {M}artin-l\"{o}f type theory: Compositional cost analysis for
   dependent types, 2026.
 \newblock arXiv:2601.10772.
 
+\bibitem{lambdaA2026}
+(see citation~in paper).
+\newblock A typed calculus for {LLM}-agent composition (lambda-a), 2026.
+\newblock cited as closest typed agent-composition work.
+
 \end{thebibliography}
