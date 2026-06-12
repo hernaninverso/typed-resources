@@ -18,10 +18,10 @@
 > instantiation to the agent-workflow / per-call-cap setting** plus the billing analysis — not a new
 > proof method. It covers the aggregate accounting Khan establishes only via Proposition 1 + empirics.
 > We **do not** address the binary-level gap, and
-> we **mechanize** Khan's ownership/no-double-spend as a separate affine Lean layer (§8,
-> `no_double_spend`) — so both source-level halves Khan establishes informally (aggregate cost via
-> Proposition 1+empirics; ownership via the borrow checker) are here machine-checked. Both works leave
-> the binary-level gap open.
+> we **mechanize the core no-double-spend property** of Khan's ownership as a separate affine Lean
+> layer (§8, `no_double_spend`) — a faithful but deliberately thin affine discipline, *not* the full
+> borrow apparatus (no explicit ownership context, move, or aliasing; those are roadmap). Both works
+> leave the binary-level gap open.
 
 ---
 
@@ -44,11 +44,12 @@ normalization,
 upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P tokens" (under the cap axiom
 and a declared-window assumption on re-sent context) — a liveness-flavored property no kill-switch
 provides. We additionally mechanize the
-**affine no-double-spend layer** (§8): a separate Lean development proving each context handle is
-spent at most once on every trace (`no_double_spend`, axioms `[propext]`) — the ownership half Khan
-leaves to the borrow checker. We are explicit about scope: the metatheory is a deliberately minimal
-fragment (one resource, integer costs, no concurrency, no expected-cost; the two layers compose but
-are not yet fused into one syntax); the rest is roadmap (§8). Finally we
+**affine no-double-spend property** (§8): a separate Lean development proving each context handle is
+spent at most once on every trace (`no_double_spend`, axioms `[propext]`) — the core of the ownership
+half Khan leaves to the borrow checker (a faithful but thin affine discipline, not a full borrow
+system). We are explicit about scope: the metatheory is a deliberately minimal fragment (one resource,
+integer costs, no concurrency, no expected-cost; the two layers compose but are not fused; the affine
+layer has no explicit ownership context/move/aliasing); the rest is roadmap (§8). Finally we
 contribute a **per-provider billing analysis** absent from prior work: the operational axiom that a
 per-call cap is a hard *billing* ceiling on output (including hidden reasoning tokens) is
 **parameter-specific, not provider-specific**. It holds for OpenAI Responses (`max_output_tokens`),
@@ -408,8 +409,13 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
 
 The potential calculus bounds *how much* a workflow spends. Its orthogonal half — *what* it spends,
 i.e. that each **context resource** (a session, a lock, a sub-agent handle) is used at most once — is
-the discipline Khan enforces with the Rust borrow checker, **on paper**. We mechanize it too, as a
-self-contained affine layer (`lean/Affine.lean`).
+the property at the heart of the ownership discipline Khan enforces with the Rust borrow checker. We
+mechanize **that essential property** (affine no-double-spend) as a self-contained layer
+(`lean/Affine.lean`). *We are precise about what this is and is not:* it is a syntactic affine
+discipline over named handles proving the consumption ledger stays duplicate-free; it is **not** the
+full borrow apparatus — there is no explicit ownership context `Γ` with membership checks, no
+move/borrow distinction, no aliasing or handle allocation. Those are the genuine remaining content of
+"mechanizing Khan's ownership" and are roadmap, not claimed here.
 
 A handle expression consumes named handles; `seqH` **splits** the available handles between its two
 sides (a handle may appear in at most one), while `branchH` **shares** them (only one branch runs).
@@ -423,18 +429,22 @@ any trace**. `#print axioms no_double_spend` reports `[propext]` only (construct
 preservation invariant: each step keeps the remaining expression affine, its handles disjoint from
 the ledger, and the ledger duplicate-free.
 
-Together with §4, this gives **both source-level guarantees machine-checked in Lean**: the aggregate
-cost bound (the half Khan leaves to Proposition 1 + empirics) *and* the affine ownership (the half he
-leaves to the borrow checker). To our knowledge, neither half had a proof-assistant proof before; the
-two layers compose as the product judgment `p; Γ ⊢ e ⊣ p′; Γ′` (numeric potential `p` × affine
-context `Γ`), each component independent, so their soundness theorems combine without interaction.
+Together with §4, this mechanizes the *core* of both source-level guarantees: the aggregate cost
+bound (the half Khan leaves to Proposition 1 + empirics) *and* the affine no-double-spend property
+(the core of the half he leaves to the borrow checker). The aggregate-cost mechanization we believe
+is the first; the affine layer is a faithful but deliberately thin discipline, not a full borrow
+system. The two layers compose as a product judgment `p; Γ ⊢ e ⊣ p′; Γ′` (numeric potential `p` ×
+affine context `Γ`), each component independent.
 
-**Still roadmap:** unifying the two layers in a *single* `Expr` (here they are separate calculi that
-compose, not one fused syntax); **multi-resource metatheory** over ℕᵏ (here k=1; rules are
-pointwise-identical, proofs should be restated for the tuple); **`par`/`retry`** with an interleaving
-semantics; **expected-cost** via probabilistic AARA (Ngo–Carbonneaux–Hoffmann, PLDI 2018), with its
-subtleties (optional stopping, supermartingales); **inferred windows `W`**; and **integration with
-LLMbda** for a combined information-flow + resource type system.
+**Still roadmap:** promoting the affine layer to a **full ownership type system** — explicit context
+`Γ ⊢ e ⊣ Γ′` with membership checks on `useH`, move/borrow distinction, aliasing and handle allocation
+(this is the substance of Khan's borrow discipline that the thin layer here does not capture); unifying
+the two layers in a *single* `Expr` (here they are separate calculi that compose, not one fused
+syntax); **multi-resource metatheory** over ℕᵏ (here k=1; rules are pointwise-identical, proofs should
+be restated for the tuple); **`par`/`retry`** with an interleaving semantics; **expected-cost** via
+probabilistic AARA (Ngo–Carbonneaux–Hoffmann, PLDI 2018), with its subtleties (optional stopping,
+supermartingales); **inferred windows `W`**; and **integration with LLMbda** for a combined
+information-flow + resource type system.
 
 ---
 
