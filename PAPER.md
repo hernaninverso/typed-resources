@@ -257,7 +257,9 @@ p − pot(if)`, needing `p ≥ max = pot(if)`. `loop(n,e)`: `b = pot(e)` by IH (
 types) and `p ≥ q = pot(delegate)`, residual `p − q`. ∎
 **Corollary (cost is fungible):** `b_e := p − p′ = pot(e)`, independent of the incoming `p`. *This
 lemma is now **machine-checked**: `lean/TypedResources.lean` defines the relational `HasType` and
-proves `hastype_iff_pot : HasType p e p' ↔ (pot e ≤ p ∧ p' = p - pot e)`, closing the
+proves `hastype_iff_pot : HasType p e p' ↔ (WellTyped e ∧ pot e ≤ p ∧ p' = p - pot e)` (the
+`WellTyped` conjunct is essential — it carries the delegate side-condition `pot(child) ≤ q`; without
+it the equivalence is false, e.g. `delegate(0, call(1))`), closing the
 relational↔functional gap rather than leaving it on paper.*
 
 ### 4.3 Lemma 2 (one-step preservation, strengthened)
