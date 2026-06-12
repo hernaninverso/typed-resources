@@ -18,8 +18,10 @@
 > instantiation to the agent-workflow / per-call-cap setting** plus the billing analysis — not a new
 > proof method. It covers the aggregate accounting Khan establishes only via Proposition 1 + empirics.
 > We **do not** address the binary-level gap, and
-> we **recover** Khan's ownership/no-double-spend as an affine layer (§8). Both works leave the
-> binary-level gap open.
+> we **mechanize** Khan's ownership/no-double-spend as a separate affine Lean layer (§8,
+> `no_double_spend`) — so both source-level halves Khan establishes informally (aggregate cost via
+> Proposition 1+empirics; ownership via the borrow checker) are here machine-checked. Both works leave
+> the binary-level gap open.
 
 ---
 
@@ -41,9 +43,12 @@ and degrades for others. For the presented weak fragment we additionally prove p
 normalization,
 upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P tokens" (under the cap axiom
 and a declared-window assumption on re-sent context) — a liveness-flavored property no kill-switch
-provides. We are explicit about scope: this is
-a deliberately minimal fragment (one resource in the metatheory, integer costs, no concurrency, no
-affine no-double-spend layer, no expected-cost); the full development is roadmap (§8). Finally we
+provides. We additionally mechanize the
+**affine no-double-spend layer** (§8): a separate Lean development proving each context handle is
+spent at most once on every trace (`no_double_spend`, axioms `[propext]`) — the ownership half Khan
+leaves to the borrow checker. We are explicit about scope: the metatheory is a deliberately minimal
+fragment (one resource, integer costs, no concurrency, no expected-cost; the two layers compose but
+are not yet fused into one syntax); the rest is roadmap (§8). Finally we
 contribute a **per-provider billing analysis** absent from prior work: the operational axiom that a
 per-call cap is a hard *billing* ceiling on output (including hidden reasoning tokens) is
 **parameter-specific, not provider-specific**. It holds for OpenAI Responses (`max_output_tokens`),
@@ -88,24 +93,26 @@ complementary to Khan's affine ownership discipline, and orthogonal to his open 
    cap axiom* (§3), proved as a termination-free safety invariant. *Scope of the mechanization, stated
    plainly:* the Lean checks (i) `steps_sound` (the §4 bound), (ii) `hastype_iff_pot` (Lemma 0 — the
    §3 relational rules equal `pot`+`WellTyped`), and (iii) `step_decreases` (every step strictly
-   decreases the §5 `(Wm,Sz)` measure). It does **not** mechanize the final well-foundedness step of
-   strong normalization, progress, the multi-resource vector, the affine layer, or the §3.2 billing
-   facts (these remain on paper). The credit-invariant
+   decreases the §5 `(Wm,Sz)` measure); a companion file `lean/Affine.lean` checks (iv)
+   `no_double_spend` (the §8 affine layer). It does **not** mechanize the final well-foundedness step
+   of strong normalization, progress, the multi-resource vector, the fusion of the two layers into one
+   syntax, or the §3.2 billing facts (these remain on paper). The credit-invariant
    technique itself is textbook AARA [Hofmann–Jost 2003], and AARA has been mechanized before (e.g.
    Carbonneaux–Hoffmann–Shao, certified resource bounds, 2015); **our novelty is not the proof technique but (i) its first
    machine-checked instantiation to the agent-workflow/per-call-cap setting and (ii) the billing
    analysis below**. Khan establishes the aggregate bound via Proposition 1 + empirics, unmechanized.
 3. **A static-vs-runtime observation** (§5): the type rejects unbounded loops *ahead of time*,
    gives static compositional conservation for sequential/nested delegation, and — via strong
-   normalization — certifies completion within budget. (We mark explicitly what the fragment does
-   *not* give: no-double-spend belongs to the affine handle layer, i.e. Khan's discipline, §8.)
+   normalization — certifies completion within budget. (No-double-spend is *not* part of this
+   potential fragment; it is the separate affine handle layer of §8, also mechanized — `no_double_spend`.)
 4. **A per-provider billing analysis** (§3.2): the operational axiom is *parameter-specific*. It holds
    for OpenAI Responses, Azure/OpenAI reasoning (`max_completion_tokens` bounds reasoning+output), and
    Anthropic standard; it degrades for Anthropic interleaved/adaptive thinking and for Gemini when
    `maxOutputTokens` is set without pinning `thinkingBudget`. We prescribe the correct cap parameter.
 
-Scope is stated throughout: this is the minimal fragment. Concurrency (`par`/`retry`), the affine
-no-double-spend layer, multi-resource metatheory, and expected-cost are roadmap (§8), not claimed.
+Scope is stated throughout: this is the minimal fragment. The affine no-double-spend layer is
+mechanized separately (§8); concurrency (`par`/`retry`), the fusion of the two layers, multi-resource
+metatheory, and expected-cost are roadmap (§8), not claimed.
 
 ### 1.1 Delta vs the closest prior work
 | | Khan [2606.04056] | Resource-Bounded Type Theory [2512.06952] | **This paper** |
@@ -397,17 +404,37 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
   with information-flow control. *Complementary (info-flow vs resources); LLMbda has no potential/
   grading, so budget-typing is not a free extension of it — integrating the two is roadmap (§8).*
 
-## 8. Limitations and roadmap
+## 8. The affine handle layer (no-double-spend), and roadmap
 
-This is the minimal fragment, deliberately small so the metatheory is checkable. The full development
-adds: the **affine handle layer** (linear context split ⟹ no-double-spend, formalizing Khan's
-ownership and recovering it inside this framework); **multi-resource metatheory** over ℕᵏ (here
-presented for k=1; the rules are pointwise-identical but the proofs should be stated for the tuple);
-**`par`/`retry` with an interleaving semantics** (conservation over concurrent trees); **expected-cost**
-via probabilistic AARA (Ngo–Carbonneaux–Hoffmann, PLDI 2018) to tighten the worst-case
-over-reservation, with its own subtleties (optional stopping, supermartingales); **inferred windows
-`W`** instead of declared; and **integration with LLMbda** for a combined information-flow + resource
-type system.
+The potential calculus bounds *how much* a workflow spends. Its orthogonal half — *what* it spends,
+i.e. that each **context resource** (a session, a lock, a sub-agent handle) is used at most once — is
+the discipline Khan enforces with the Rust borrow checker, **on paper**. We mechanize it too, as a
+self-contained affine layer (`lean/Affine.lean`).
+
+A handle expression consumes named handles; `seqH` **splits** the available handles between its two
+sides (a handle may appear in at most one), while `branchH` **shares** them (only one branch runs).
+Affine well-typedness `linear` enforces the split. The instrumented semantics records consumed
+handles in a ledger, and the central theorem is
+
+> `no_double_spend : linear e → disj (handles e) u → nodupL u → HSteps e u e′ u′ → nodupL u′`
+
+— a well-typed affine expression, run from a fresh ledger, **never records the same handle twice on
+any trace**. `#print axioms no_double_spend` reports `[propext]` only (constructive). The proof is a
+preservation invariant: each step keeps the remaining expression affine, its handles disjoint from
+the ledger, and the ledger duplicate-free.
+
+Together with §4, this gives **both source-level guarantees machine-checked in Lean**: the aggregate
+cost bound (the half Khan leaves to Proposition 1 + empirics) *and* the affine ownership (the half he
+leaves to the borrow checker). To our knowledge, neither half had a proof-assistant proof before; the
+two layers compose as the product judgment `p; Γ ⊢ e ⊣ p′; Γ′` (numeric potential `p` × affine
+context `Γ`), each component independent, so their soundness theorems combine without interaction.
+
+**Still roadmap:** unifying the two layers in a *single* `Expr` (here they are separate calculi that
+compose, not one fused syntax); **multi-resource metatheory** over ℕᵏ (here k=1; rules are
+pointwise-identical, proofs should be restated for the tuple); **`par`/`retry`** with an interleaving
+semantics; **expected-cost** via probabilistic AARA (Ngo–Carbonneaux–Hoffmann, PLDI 2018), with its
+subtleties (optional stopping, supermartingales); **inferred windows `W`**; and **integration with
+LLMbda** for a combined information-flow + resource type system.
 
 ---
 

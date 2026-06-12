@@ -1,6 +1,17 @@
 # Lean 4 mechanization — Typed Resource Bounds for Agent Workflows
 
-Self-contained, **no Mathlib**. Single file: `TypedResources.lean`.
+Self-contained, **no Mathlib**. Two files:
+- `TypedResources.lean` — the potential calculus: cost-soundness, relational↔functional equivalence,
+  termination measure.
+- `Affine.lean` — the affine handle layer: **no-double-spend** (`no_double_spend`, axioms `[propext]`).
+  Each context handle is consumed at most once on every trace; `seqH` splits handles, `branchH`
+  shares them. This is the ownership half Khan enforces with the Rust borrow checker, here mechanized.
+
+Both build with `lean <file>.lean` (exit 0, zero `sorry`).
+
+---
+
+## TypedResources.lean
 
 ## What is proved
 
