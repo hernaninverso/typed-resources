@@ -1,13 +1,16 @@
 # Lean 4 mechanization — Typed Resource Bounds for Agent Workflows
 
-Self-contained, **no Mathlib**. Two files:
+Self-contained, **no Mathlib**. Three files:
 - `TypedResources.lean` — the potential calculus: cost-soundness, relational↔functional equivalence,
   termination measure.
+- `TypedResourcesVec.lean` — the **vector** version: the same cost-soundness theorem (`vsteps_sound`)
+  for an arbitrary-dimension resource vector `Res k = Fin k → ℕ` with pointwise `≤`/`+`/`max`
+  (k=3 = ⟨tokens, calls, $⟩). Axioms `[propext, Quot.sound]`.
 - `Affine.lean` — the affine handle layer: **no-double-spend** (`no_double_spend`, axioms `[propext]`).
   Each context handle is consumed at most once on every trace; `seqH` splits handles, `branchH`
   shares them. This is the ownership half Khan enforces with the Rust borrow checker, here mechanized.
 
-Both build with `lean <file>.lean` (exit 0, zero `sorry`).
+All build with `lean <file>.lean` (exit 0, zero `sorry`).
 
 ---
 
@@ -52,13 +55,25 @@ Toolchain: Lean `v4.30.0` (pinned in `lean-toolchain`). No external dependencies
 
 ## Trust base
 
+`#print axioms` output for every mechanized theorem (verified, Lean v4.30.0):
+
 ```
 #print axioms TypedResources.steps_sound
--- 'TypedResources.steps_sound' depends on axioms: [propext, Quot.sound]
+--   depends on axioms: [propext, Quot.sound]
+#print axioms TypedResources.hastype_iff_pot
+--   depends on axioms: [propext, Quot.sound]
+#print axioms TypedResources.step_decreases
+--   depends on axioms: [propext, Classical.choice, Quot.sound]
+#print axioms TypedResourcesVec.vsteps_sound
+--   depends on axioms: [propext, Quot.sound]
+#print axioms Affine.no_double_spend
+--   depends on axioms: [propext]
 ```
 
-Only `propext` and `Quot.sound` — Lean's two foundational kernel axioms. **No `sorryAx`, no
-`Classical.choice`.** The proof is constructive.
+`steps_sound`, `hastype_iff_pot`, `vsteps_sound` and `no_double_spend` use only Lean's foundational
+kernel axioms (`propext`, `Quot.sound`) — **no `sorryAx`, constructive**. `step_decreases`
+additionally uses `Classical.choice` (in the lexicographic-measure machinery); the headline
+cost-soundness theorems do not.
 
 ## Scope (matches the paper)
 

@@ -349,11 +349,13 @@ cost-soundness safety invariant `steps_sound`; (2) **Lemma 0** — the relationa
 `hastype_iff_pot : HasType p e p' ↔ (WellTyped e ∧ pot e ≤ p ∧ p' = p − pot e)`, so the bridge from
 the §3 typing rules to `pot` is no longer on paper; (3) **the §5 termination measure**
 `step_decreases : Step e g e' g' → Lex e' e`, i.e. every operational step strictly decreases the
-lexicographic `(Wm, Sz)` — the load-bearing content of strong normalization. `steps_sound` and
-`hastype_iff_pot` use only `[propext, Quot.sound]` (constructive); `step_decreases` additionally uses
+lexicographic `(Wm, Sz)` — the load-bearing content of strong normalization. Also machine-checked,
+in `lean/TypedResourcesVec.lean`: (4) `vsteps_sound` — the same cost-soundness theorem for an
+arbitrary-dimension resource vector (§4). `steps_sound`, `hastype_iff_pot` and `vsteps_sound`
+use only `[propext, Quot.sound]` (constructive); `step_decreases` additionally uses
 `Classical.choice`; the affine layer's `no_double_spend` (in `lean/Affine.lean`) uses `[propext]`.
 Still **pen-and-paper**: the final step from `step_decreases` to "no infinite
-reduction" (standard well-foundedness of `<ₗₑₓ` on ℕ×ℕ), progress, the multi-resource vector, the
+reduction" (standard well-foundedness of `<ₗₑₓ` on ℕ×ℕ), progress, the
 fusion of the two layers, and the §3.2 billing facts. So the "*completes* within budget" upgrade now rests on a
 mechanized measure-decrease plus a standard well-foundedness step; the headline *mechanized* guarantee
 remains the safety bound "never *spends* more than the declared potential."
@@ -491,8 +493,11 @@ the single-step credit invariant `step_sound` and its transitive lift `steps_cre
 Lemma 0 equivalence `hastype_iff_pot` and the §5 measure decrease `step_decreases`.*
 `#print axioms steps_sound` *reports only `[propext, Quot.sound]` — Lean's two foundational kernel
 axioms; no `sorryAx`, no `Classical.choice`, so the proof is constructive. This is the
-machine-checked claim. (2) The **affine layer** (`lean/Affine.lean`): `no_double_spend`, axioms
-`[propext]` (§8). (3) A Python sanity harness (`check.py`) on a fixed 5-program battery, which
+machine-checked claim. (2) The **vector mechanization** (`lean/TypedResourcesVec.lean`):
+`vsteps_sound`, the same cost-soundness theorem for an arbitrary-dimension resource vector
+`Fin k → ℕ` (k=3 = ⟨tokens, calls, $⟩), axioms `[propext, Quot.sound]`. (3) The **affine layer**
+(`lean/Affine.lean`): `no_double_spend`, axioms `[propext]` (§8). (4) A Python sanity harness
+(`check.py`) on a fixed 5-program battery, which
 (i) confirms the no-fuel runaway loop does not type, (ii) confirms sequential delegation
 conservation, and (iii) reports zero `g ≤ p` violations over random cost assignments. Note (ii)–(iii)
 only test that the executable rules agree with the paper: the generator enforces `a ≤ c` by
