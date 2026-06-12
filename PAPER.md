@@ -1,6 +1,6 @@
 # A Potential-Based Calculus for Resource Bounds of LLM-Agent Workflows
 
-**Hernán Inverso** · INVERSO HUB S.R.L. / CONICET
+**Hernán Inverso**
 *Preprint, v2.7 — 12 June 2026*
 
 > Relation to Khan [2606.04056] (stated up front to avoid any overclaim; **verified verbatim against
