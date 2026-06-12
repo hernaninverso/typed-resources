@@ -3,17 +3,21 @@
 **Hernán Inverso** · INVERSO HUB S.R.L. / CONICET
 *Preprint, draft v1 — 12 June 2026*
 
-> Relation to Khan [2606.04056] (stated up front to avoid any overclaim): Khan gives an empirical
-> catalogue of 63 budget-overrun incidents and an **affine (Rust borrow-checker) mitigation** whose
-> *source-level* cap integrity is enforced by the borrow checker and is **already mechanized** (Coq
-> artifact). Khan explicitly leaves open only **binary-level** cap-soundness ("on the running binary
-> is left open") — the source→binary gap. **This paper does not address that binary-level gap.** We
-> contribute a different, complementary object: a *potential-based* calculus with an **operational
-> cost-soundness** theorem (the gas consumed by a well-typed workflow is bounded by its declared
-> potential), with multi-resource ⟨tokens, calls, $⟩ accounting, a compositional delegation rule, and
-> a per-provider billing analysis. Where Khan's affine discipline forbids double-spend of a budget
-> *handle*, our potential discipline bounds aggregate *cost*; the two are orthogonal and combine
-> (§8).
+> Relation to Khan [2606.04056] (stated up front to avoid any overclaim; **verified verbatim against
+> the paper body**). Khan gives an empirical catalogue of 63 budget-overrun incidents and an **affine
+> (Rust borrow-checker) mitigation**. Khan's proofs are **pen-and-paper — there is no proof-assistant
+> mechanization** (the shipped artifact is "consistency evidence… not a proof"). Source-level
+> ownership integrity is enforced by the Rust borrow checker; the **aggregate cost bound** (Σ ≤
+> budget) is his **Proposition 1**, sound only under a provider-stratified estimator assumption (A1)
+> and **validated empirically** (382 live-API sessions, zero overshoot), *not formally proved*;
+> binary-level cap-soundness is his open **Conjecture 1**. **This paper contributes a machine-checked
+> (Lean 4) proof of the aggregate cost bound for well-typed multi-step workflows** — amortized
+> cost-accounting via a potential calculus, with multi-resource ⟨tokens, calls, $⟩ accounting, a
+> compositional delegation rule, and a per-provider billing analysis. To our knowledge this is the
+> first machine-checked cap-soundness result for agent workflows; it covers the aggregate accounting
+> Khan establishes only via Proposition 1 + empirics. We **do not** address the binary-level gap, and
+> we **recover** Khan's ownership/no-double-spend as an affine layer (§8). Both works leave the
+> binary-level gap open.
 
 ---
 
@@ -25,11 +29,16 @@ Azure recommends "implement your own logic"), and behavioral contracts that admi
 call can exceed the budget after it completes. We give a small **affine calculus with numeric
 potential** over ⟨tokens, calls, $⟩, in the style of Hofmann–Jost Automatic Amortized Resource
 Analysis (AARA), with seven constructs mirroring real frameworks and a delegation rule whose linear
-potential split is adapted from resource-aware session types. Our **cost-soundness theorem** states
-that a well-typed workflow's accumulated gas never exceeds its declared potential, on *every* trace
-including partial and divergent ones. For the presented weak fragment we additionally prove progress
-and strong normalization, upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P
-tokens" — a liveness-flavored property no kill-switch provides. We are explicit about scope: this is
+potential split is adapted from resource-aware session types. Our **machine-checked (Lean 4)
+cost-soundness theorem** states that a well-typed workflow's accumulated gas never exceeds its
+declared potential at *every reachable configuration* — a safety invariant **proved without assuming
+termination**, so it survives partial traces and lifts unchanged to non-terminating extensions —
+**under the cap axiom** (per-call cost ≤ the declared cap), which §3.2 shows holds for some providers
+and degrades for others. For the presented weak fragment we additionally prove progress and strong
+normalization,
+upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P tokens" (under the cap axiom
+and a declared-window assumption on re-sent context) — a liveness-flavored property no kill-switch
+provides. We are explicit about scope: this is
 a deliberately minimal fragment (one resource in the metatheory, integer costs, no concurrency, no
 affine no-double-spend layer, no expected-cost); the full development is roadmap (§8). Finally we
 contribute a **per-provider billing analysis** absent from prior work: the operational axiom that a
@@ -56,8 +65,9 @@ tracking and alerts, not enforcement; LiteLLM gives runtime per-key budgets for 
 Contracts* [2601.08815] specifies multi-dimensional resource bounds with conservation laws but
 enforces them *at runtime* and admits a single call's cost is known only on completion. Khan
 [2606.04056] is the first to bring *static* typing to bear: an affine (Rust borrow-checker)
-mitigation whose source-level cap integrity is enforced and mechanized, leaving only binary-level
-soundness open.
+mitigation whose source-level ownership integrity is enforced by the borrow checker (pen-and-paper,
+not mechanized), with the aggregate cost bound given as Proposition 1 (conditional on estimator
+assumption A1) and validated empirically, and binary-level soundness left open (Conjecture 1).
 
 **This paper.** We provide an *operational* cost-soundness result via a potential-based calculus —
 complementary to Khan's affine ownership discipline, and orthogonal to his open binary-level gap.
@@ -67,9 +77,12 @@ complementary to Khan's affine ownership discipline, and orthogonal to his open 
    (the metatheory is presented for k=1; the vector form is identical rule-by-rule), with seven
    constructs mirroring real frameworks, including a delegation rule whose linear potential split is
    adapted from resource-aware session types.
-2. **A cost-soundness theorem** (§4): well-typed ⟹ gas ≤ declared potential, on every trace
-   including partial and divergent ones — the cap holds by construction. Plus progress and strong
-   normalization for the fragment (§5), giving the "completes within budget" guarantee.
+2. **A machine-checked (Lean 4) cost-soundness theorem** (§4): well-typed ⟹ gas ≤ declared
+   potential at every reachable configuration, *under the cap axiom* (§3), proved as a
+   termination-free safety invariant (so it covers partial traces and lifts to non-terminating
+   extensions). Plus progress and strong normalization for the fragment (§5), giving
+   the "completes within budget" guarantee. To our knowledge the first mechanized cap-soundness proof
+   for agent workflows; Khan establishes the aggregate bound via Proposition 1 + empirics only.
 3. **A static-vs-runtime observation** (§5): the type rejects unbounded loops *ahead of time*,
    gives static compositional conservation for sequential/nested delegation, and — via strong
    normalization — certifies completion within budget. (We mark explicitly what the fragment does
@@ -85,11 +98,12 @@ no-double-spend layer, multi-resource metatheory, and expected-cost are roadmap 
 | | Khan [2606.04056] | Resource-Bounded Type Theory [2512.06952] | **This paper** |
 |---|---|---|---|
 | mechanism | affine ownership (Rust borrow checker) | graded modalities, abstract resource lattice | **AARA numeric potential** |
-| guarantee | no-double-spend of a handle (source-level, mechanized) | cost-soundness, recursion-free | **operational cost-soundness incl. divergent traces** |
+| proofs | pen-and-paper (no proof assistant) | syntactic, recursion-free | **machine-checked (Lean 4)** |
+| cost guarantee | Proposition 1 (cond. on A1) + empirical, not proved | syntactic cost-soundness, recursion-free | **operational cost-soundness, termination-free safety invariant** |
 | resources | one budget | abstract lattice (time/mem/gas) | **⟨tokens, calls, $⟩ tuple** |
 | delegation | — | — | **compositional split (session-type style)** |
-| LLM coupling | dollar cap, no reasoning models | mentions "time-bounded agents", no API model | **cap axiom + per-provider billing + framework map** |
-| left open | binary-level soundness | recursion | concurrency, affine layer, expected-cost |
+| LLM coupling | dollar cap, no reasoning models | none (general resources) | **cap axiom + per-provider billing + framework map** |
+| left open | binary-level soundness (Conjecture 1) | recursion | concurrency, affine layer, expected-cost |
 
 Our novelty is the *coupling* of amortized potential to the agent setting — the cap axiom, the
 ⟨tokens,calls,$⟩ tuple, compositional delegation, and the per-provider billing analysis — not the
@@ -142,9 +156,9 @@ the incoming potential.
 
 ### 3.1 Small-step semantics with monotone gas
 Configurations `⟨e, g⟩`, gas `g ∈ ℕ`. The **operational axiom** is the only place provider behavior
-enters: `⟨call(c), g⟩ → ⟨skip, g+a⟩` for some `0 ≤ a ≤ c` — the API enforces actual cost ≤ the
-declared cap (it truncates and bills at most `c`), *not* the model's obedience (token elasticity
-shows the model does not obey budgets in the prompt). Remaining rules:
+enters: `⟨call(c), g⟩ → ⟨skip, g+a⟩` and `⟨tool(c), g⟩ → ⟨skip, g+a⟩` for some `0 ≤ a ≤ c` — the API
+enforces actual cost ≤ the declared cap (it truncates and bills at most `c`), *not* the model's
+obedience (token elasticity shows the model does not obey budgets in the prompt). Remaining rules:
 ```
 skip ; e → e        e₁;e₂ → e₁′;e₂  (if e₁→e₁′)      if e₁ e₂ → e_i
 loop(n+1, e) → e ; loop(n, e)        loop(0, e) → skip        delegate(q, e) → e
@@ -216,11 +230,21 @@ the normal form `b_e` and raises, which is what the loop case of Lemma 2 needs.)
 - `delegate(q,e)→e, d=0`: `q⊢e:⋄;q′`, `p≥q+p′`; Lemma 1 raises child `q→p`: `p⊢e:⋄;p−q+q′`,
   `r=p−q+q′≥p−q≥p′`. ∎
 
-### 4.4 Theorem (gas bound — safety, every trace incl. partial/divergent)
+### 4.4 Theorem (gas bound — a safety invariant on every reachable configuration)
 **For all `g₀`: if `p ⊢ e:⋄;_` and `⟨e,g₀⟩ →* ⟨e″,g⟩`, then `g−g₀ ≤ p`** (with `g₀=0`: `g ≤ p`).
 *Proof* by induction on the number `m` of steps. `m=0`: `0≤p`. `m→m+1`: `⟨e,g₀⟩→⟨e₁,g₁⟩→*⟨e″,g⟩`;
 by Lemma 2, `d₁=g₁−g₀≤p` and `p−d₁⊢e₁:⋄;_`; by IH on the `m`-step subtrace (incoming `p−d₁`),
 `g−g₁≤p−d₁`; summing, `g−g₀≤d₁+(p−d₁)=p`. ∎
+
+This is a **safety property**: it holds at every reachable configuration `⟨e″,g⟩` and **its proof
+never appeals to termination** (it is the transitive lift of the per-step credit invariant
+`g + Φ` non-increasing, Lemma 2). The weak fragment is in fact strongly normalizing (§5), so no
+divergent trace exists *here* — but because the bound is termination-free, the **same invariant
+lifts unchanged to extensions with genuine non-termination** (e.g. fuel-free recursion), where it is
+the only thing standing between a workflow and unbounded spend. That is the point of proving it as
+an invariant rather than as a corollary of termination. The Lean theorem `steps_sound`
+(`Steps e 0 e′ g′ → WellTyped e → g′ ≤ pot e`) is exactly this statement, quantified over all
+reachable `⟨e′,g′⟩`.
 
 ## 5. Progress, termination, and what the type adds over a runtime tracker
 
@@ -231,10 +255,13 @@ iteration is the unrolling overhead). `S(e)` is the number of AST nodes. **Lemma
 operational rule strictly decreases `(W,S)` lexicographically:
 - `call(c)→skip`: `W` drops `1→0`.
 - `loop(n+1,e)→e;loop(n,e)`: `W` drops by **exactly 1** — LHS `W=(n+1)(W(e)+1)`, RHS
-  `W=W(e)+n(W(e)+1)`, so LHS−RHS `= 1`. (This is the case the unrolling makes subtle: `S` grows here,
-  but `W` strictly decreases, so the pair decreases.)
-- The steps that leave `W` unchanged — `skip;e→e`, `if e₁ e₂→e_i` (when the taken branch's `W` equals
-  the max), `loop(0,e)→skip`, `delegate(q,e)→e` — each strictly drop `S` (they remove an AST node).
+  `W=W(e)+n(W(e)+1)`, so LHS−RHS `= 1`. The unfold **duplicates `e` syntactically, so `S` grows
+  here**; this is harmless because `W` (the higher-priority component) strictly decreases — standard
+  lexicographic pattern, where `S` only governs the `W`-constant steps.
+- The `W`-non-increasing steps — `skip;e→e`, `if e₁ e₂→e_i` (where `W(e_i) ≤ max(W(e₁),W(e₂)) = W(if)`,
+  so `W` drops or stays equal; if equal, `S` drops), `loop(0,e)→skip`, `delegate(q,e)→e` — each
+  strictly drop `S` when `W` is unchanged (they remove an AST node; `W(delegate(q,e))=W(e)` makes the
+  delegate step `W`-equal, `S`-down).
 - `e₁;e₂→e₁′;e₂` decreases `(W,S)` by IH on `e₁` (lifted through `W(e₁;e₂)=W(e₁)+W(e₂)`).
 
 So the fragment is strongly normalizing. ∎ **Progress.** Every typable `e≠skip` steps (by inversion:
@@ -250,12 +277,17 @@ possibly mid-task. The type gives more, *ahead of time*:
   (§8).
 - **(c)** *Completes consuming ≤ P tokens.* By strong normalization + progress + the gas bound, a
   well-typed workflow with potential `p` **terminates and consumes ≤ p** — "I will finish within P
-  tokens." A tracker gives only "aborts at B": you pay `B` for a half-finished result. **We state
-  this in tokens/tool-calls; the dollar version holds only where the §3.2 cap axiom holds.**
+  tokens." A tracker gives only "aborts at B": you pay `B` for a half-finished result. **Two
+  conditions, both explicit:** (i) the cap axiom holds (§3.2) — else per-call cost may exceed `c`;
+  (ii) the declared window `W` upper-bounds the re-sent context at every iteration (§3.1) — if `W`
+  underestimates real context (prompt caching, large tool outputs, retries that regrow context), the
+  token bound breaks though the calculus stays sound. The dollar version additionally needs the cap
+  axiom's billing form. We therefore state the guarantee in tokens/tool-calls, conditional on (i)–(ii).
 
 *What the fragment does not give.* No-double-spend of a context resource is not a consequence of the
-pure-potential rules; it needs affine handles with linear context split (Khan's ownership,
-formalized; §8). We flag this to avoid over-claiming: it is exactly the part Khan already mechanizes.
+pure-potential rules; it needs affine handles with linear context split (the ownership discipline
+Khan enforces via the Rust borrow checker, pen-and-paper; §8). We flag this to avoid over-claiming:
+that orthogonal property is exactly what Khan's affine layer targets, and our §8 sketch recovers it.
 
 ## 6. Mapping to frameworks: the checker is a linter, not a new DSL
 
@@ -272,12 +304,14 @@ existing config*, not a language to adopt. (`par` is roadmap, marked †; it is 
 ## 7. Related work
 
 - **Khan [2606.04056]** (Jun 2026): 63-incident catalogue + affine (Rust) mitigation; source-level
-  cap integrity enforced by the borrow checker and mechanized; **binary-level** soundness left open.
-  *We give an orthogonal, operational cost-soundness via potential; we do not touch the binary gap,
-  and our affine layer (§8) recovers his no-double-spend.*
+  ownership enforced by the borrow checker (**pen-and-paper, not mechanized**); the aggregate cost
+  bound is Proposition 1 (conditional on estimator assumption A1) + empirical validation (382 live
+  sessions), not a proof; **binary-level** soundness left open (Conjecture 1). *We give a
+  machine-checked, operational cost-soundness via potential; we do not touch the binary gap, and our
+  affine layer (§8) recovers his no-double-spend.*
 - **Graded / cost-aware type systems.** Resource-Bounded Type Theory [2512.06952] (Dec 2025) proves
-  cost-soundness for a recursion-free fragment over an abstract resource lattice (and mentions
-  time-bounded agents); its dependent MLTT variant [2601.10772]; `calf` [2107.04663]; RelCost;
+  syntactic cost-soundness for a recursion-free fragment over an abstract resource lattice; its
+  dependent MLTT variant [2601.10772]; `calf` [2107.04663]; RelCost;
   Granule. *None is agent/token-specific. Our contribution is the LLM coupling — the cap axiom, the
   ⟨tokens,calls,$⟩ tuple, per-provider billing, framework map — not the potential/grading method.*
 - **AARA** (Hofmann–Jost POPL 2003; "Two Decades of AARA", MSCS 2022): the potential method; soundness
@@ -304,8 +338,18 @@ type system.
 
 ---
 
-*Artifact (`check.py`): a mechanization of the typing rules and instrumented semantics on a fixed
-5-program battery, which (i) confirms the runaway loop without fuel does not type, (ii) confirms
-sequential delegation conservation, and (iii) reports zero `g ≤ p` violations over random cost
-assignments (`a ≤ c`, seed 0). The artifact validates that the mechanization agrees with the
-paper rules; soundness itself is the theorem of §4, not an empirical claim.*
+*Artifacts. (1) A **Lean 4 mechanization** (`lean/TypedResources.lean`, self-contained, no Mathlib,
+Lean v4.30.0) of the calculus and the §4 theorem, stated as*
+`steps_sound : Steps e 0 e′ g′ → WellTyped e → g′ ≤ pot e`
+*— a well-typed workflow from zero gas spends `g′ ≤ pot e` on every reachable configuration
+(partial or divergent), where `Step.call`/`Step.tool` encode the cap axiom `a ≤ c`. It is proved
+via the single-step credit invariant `step_sound` and its transitive lift `steps_credit`.*
+`#print axioms steps_sound` *reports only `[propext, Quot.sound]` — Lean's two foundational kernel
+axioms; no `sorryAx`, no `Classical.choice`, so the proof is constructive. This is the
+machine-checked claim. (2) A Python sanity harness (`check.py`) on a fixed 5-program battery, which
+(i) confirms the no-fuel runaway loop does not type, (ii) confirms sequential delegation
+conservation, and (iii) reports zero `g ≤ p` violations over random cost assignments. Note (ii)–(iii)
+only test that the executable rules agree with the paper: the generator enforces `a ≤ c` by
+construction, so the harness **cannot** witness a cap violation — it validates rule/code
+consistency, not soundness under an adversarial provider. Soundness is the Lean theorem, not an
+empirical claim.*

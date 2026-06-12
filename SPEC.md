@@ -4,15 +4,18 @@
 > para que el council revise contra un contrato y no contra el gusto.
 
 ## Objetivo (una frase)
-Un preprint corto en arXiv que **resuelve a nivel cálculo el caso base de la Conjecture 1 de Khan**
-(arXiv 2606.04056): un cálculo afín con potencial para workflows de agentes + prueba de soundness
-"well-typed ⟹ el gasto nunca excede el potencial declarado", en TODA traza (incl. parcial/divergente),
-más un hallazgo de facturación por-provider que el prior-art empírico no tiene.
+Un preprint corto en arXiv con la **primera prueba mecanizada (Lean 4) de cost-soundness agregada para
+workflows de agentes**: un cálculo afín con potencial + prueba "well-typed ⟹ el gasto nunca excede el
+potencial declarado" en TODA traza (incl. parcial/divergente), bajo el axioma de cap per-call. Es
+COMPLEMENTARIO a Khan (arXiv 2606.04056), no lo resuelve: Khan da la cota agregada como Proposition 1
+(condicional a A1) + validación empírica, sin mecanización; su Conjecture 1 es a nivel binario y queda
+intacta. Más un hallazgo de facturación por-provider que el prior-art empírico no tiene.
 
 ## Claims (lo que el paper AFIRMA — el council verifica cada uno)
 - **C1 (teorema central):** para el fragmento débil (1 recurso, costos enteros, potencial puro), si
   `p ⊢ e:⋄;_` y `⟨e,g₀⟩→*⟨e″,g⟩` bajo el axioma de cap per-call, entonces `g−g₀ ≤ p`. Probado por
-  inducción; auditado a convergencia (3 pasadas).
+  inducción y **mecanizado en Lean 4** (`HasCost e b → Steps ⟨e,0⟩ ⟨e′,g⟩ → g ≤ b`); auditado a
+  convergencia (3 pasadas).
 - **C2 (liveness del fragmento):** el fragmento débil es fuertemente normalizante y progresa →
   certifica "COMPLETA dentro de $X" (no sólo "gasta ≤$X"), distinción que un kill-switch no da.
 - **C3 (certificación estática vs runtime):** el tipo da rechazo ex-ante de loops sin fuel +
@@ -34,7 +37,7 @@ más un hallazgo de facturación por-provider que el prior-art empírico no tien
   como superficie donde la cota degrada).
 
 ## Estructura (target: 6-8 pp, workshop/short)
-1. Introducción (dolor con fuentes citables + Khan + contribución: resolvemos el caso base de su Conj.1)
+1. Introducción (dolor con fuentes citables + Khan + contribución: primera prueba mecanizada de la cota agregada, complementaria a Khan)
 2. El cálculo afín con potencial (sintaxis, juicio, reglas)
 3. Semántica instrumentada + axioma de cap + el hallazgo de billing por-provider (C4)
 4. Soundness (Lemas 0/1/2 + Teorema) — la prueba auditada
