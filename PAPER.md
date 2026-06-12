@@ -13,9 +13,11 @@
 > binary-level cap-soundness is his open **Conjecture 1**. **This paper contributes a machine-checked
 > (Lean 4) proof of the aggregate cost bound for well-typed multi-step workflows** — amortized
 > cost-accounting via a potential calculus, with multi-resource ⟨tokens, calls, $⟩ accounting, a
-> compositional delegation rule, and a per-provider billing analysis. To our knowledge this is the
-> first machine-checked cap-soundness result for agent workflows; it covers the aggregate accounting
-> Khan establishes only via Proposition 1 + empirics. We **do not** address the binary-level gap, and
+> compositional delegation rule, and a per-provider billing analysis. The proof technique is textbook
+> AARA (and AARA has been mechanized before, for C); the novelty is the **first machine-checked
+> instantiation to the agent-workflow / per-call-cap setting** plus the billing analysis — not a new
+> proof method. It covers the aggregate accounting Khan establishes only via Proposition 1 + empirics.
+> We **do not** address the binary-level gap, and
 > we **recover** Khan's ownership/no-double-spend as an affine layer (§8). Both works leave the
 > binary-level gap open.
 
@@ -24,16 +26,17 @@
 ## Abstract
 
 Autonomous LLM-agent workflows consume tokens, tool calls and money in loops, and current safeguards
-are *runtime* and *fallible*: provider budget caps that only notify (OpenAI removed its hard cap;
-Azure recommends "implement your own logic"), and behavioral contracts that admit a single expensive
-call can exceed the budget after it completes. We give a small **affine calculus with numeric
+are *runtime* and *fallible*: a per-call cap exists, but the *project-level* budget only notifies
+(OpenAI's project budget now warns rather than halts; Azure recommends "implement your own logic"),
+and nothing bounds the **aggregate** across many capped calls — a single in-budget call can still
+push a multi-step run over its total after it completes. We give a small **affine calculus with numeric
 potential** over ⟨tokens, calls, $⟩, in the style of Hofmann–Jost Automatic Amortized Resource
 Analysis (AARA), with seven constructs mirroring real frameworks and a delegation rule whose linear
 potential split is adapted from resource-aware session types. Our **machine-checked (Lean 4)
 cost-soundness theorem** states that a well-typed workflow's accumulated gas never exceeds its
 declared potential at *every reachable configuration* — a safety invariant **proved without assuming
-termination**, so it survives partial traces and lifts unchanged to non-terminating extensions —
-**under the cap axiom** (per-call cost ≤ the declared cap), which §3.2 shows holds for some providers
+termination** (so it covers every finite prefix; the same argument would carry to non-terminating
+extensions, an observation we do not mechanize) — **under the cap axiom** (per-call cost ≤ the declared cap), which §3.2 shows holds for some providers
 and degrades for others. For the presented weak fragment we additionally prove progress and strong
 normalization,
 upgrading the guarantee from "spends ≤ P" to "*completes consuming* ≤ P tokens" (under the cap axiom
@@ -42,9 +45,12 @@ provides. We are explicit about scope: this is
 a deliberately minimal fragment (one resource in the metatheory, integer costs, no concurrency, no
 affine no-double-spend layer, no expected-cost); the full development is roadmap (§8). Finally we
 contribute a **per-provider billing analysis** absent from prior work: the operational axiom that a
-per-call cap is a hard *billing* ceiling holds for Anthropic standard/adaptive thinking, the OpenAI
-Responses API and Gemini, but **degrades** for Azure reasoning models and Anthropic interleaved
-thinking, where hidden reasoning tokens are billed beyond the declared cap. Consequently we certify
+per-call cap is a hard *billing* ceiling on output (including hidden reasoning tokens) is
+**parameter-specific, not provider-specific**. It holds for OpenAI Responses (`max_output_tokens`),
+Azure/OpenAI reasoning (`max_completion_tokens` — reasoning tokens are inside `completion_tokens`),
+and Anthropic standard (`budget_tokens < max_tokens`), but **degrades** for Anthropic
+interleaved/adaptive thinking (budget may exceed `max_tokens`) and Gemini when `maxOutputTokens` is
+set without pinning the separate `thinkingBudget` (§3.2, primary docs). Consequently we certify
 in tokens/tool-calls (stable) and map to dollars only where the axiom holds.
 
 ## 1. Introduction
@@ -78,18 +84,24 @@ complementary to Khan's affine ownership discipline, and orthogonal to his open 
    constructs mirroring real frameworks, including a delegation rule whose linear potential split is
    adapted from resource-aware session types.
 2. **A machine-checked (Lean 4) cost-soundness theorem** (§4): well-typed ⟹ gas ≤ declared
-   potential at every reachable configuration, *under the cap axiom* (§3), proved as a
-   termination-free safety invariant (so it covers partial traces and lifts to non-terminating
-   extensions). Plus progress and strong normalization for the fragment (§5), giving
-   the "completes within budget" guarantee. To our knowledge the first mechanized cap-soundness proof
-   for agent workflows; Khan establishes the aggregate bound via Proposition 1 + empirics only.
+   potential at every *reachable configuration* (hence every finite prefix of any trace), *under the
+   cap axiom* (§3), proved as a termination-free safety invariant. *Scope of the mechanization, stated
+   plainly:* the Lean proves exactly `steps_sound` over the functional presentation `pot`+`WellTyped`
+   for the single-resource weak fragment; it does **not** mechanize the relational judgment of §4
+   (their equivalence, Lemma 0, is argued on paper), the strong-normalization/progress results of §5,
+   the multi-resource vector, the affine layer, or the §3.2 billing facts. The credit-invariant
+   technique itself is textbook AARA [Hofmann–Jost 2003], and AARA has been mechanized before (e.g.
+   Carbonneaux–Hoffmann–Shao, certified resource bounds, 2015); **our novelty is not the proof technique but (i) its first
+   machine-checked instantiation to the agent-workflow/per-call-cap setting and (ii) the billing
+   analysis below**. Khan establishes the aggregate bound via Proposition 1 + empirics, unmechanized.
 3. **A static-vs-runtime observation** (§5): the type rejects unbounded loops *ahead of time*,
    gives static compositional conservation for sequential/nested delegation, and — via strong
    normalization — certifies completion within budget. (We mark explicitly what the fragment does
    *not* give: no-double-spend belongs to the affine handle layer, i.e. Khan's discipline, §8.)
-4. **A per-provider billing analysis** (§3.2): the operational axiom holds for Anthropic
-   standard/adaptive, OpenAI Responses and Gemini, and degrades for Azure reasoning and Anthropic
-   interleaved thinking. We prescribe the correct cap parameter per provider.
+4. **A per-provider billing analysis** (§3.2): the operational axiom is *parameter-specific*. It holds
+   for OpenAI Responses, Azure/OpenAI reasoning (`max_completion_tokens` bounds reasoning+output), and
+   Anthropic standard; it degrades for Anthropic interleaved/adaptive thinking and for Gemini when
+   `maxOutputTokens` is set without pinning `thinkingBudget`. We prescribe the correct cap parameter.
 
 Scope is stated throughout: this is the minimal fragment. Concurrency (`par`/`retry`), the affine
 no-double-spend layer, multi-resource metatheory, and expected-cost are roadmap (§8), not claimed.
@@ -176,25 +188,35 @@ Input cost (re-sent context, ~62% of the bill in practice) is folded into `c = W
 The gas `g` is a global additive counter the semantics never reads — hence invariance under shifting
 the initial gas (§4.4).
 
-### 3.2 When the axiom holds: per-provider billing (sample, accessed June 2026)
-The cap axiom requires the declared per-call parameter to be a hard *billing* ceiling, **including
-hidden reasoning tokens**. This holds unevenly; getting it right is a contribution prior work lacks.
-This is a *sample*, not a complete characterization, and these APIs are volatile (dated access):
+### 3.2 When the axiom holds: per-provider billing (sample, primary docs accessed June 2026)
+The cap axiom requires the declared per-call parameter to be a hard *billing* ceiling on **billed
+output tokens, including hidden reasoning/thinking tokens** (which every provider bills as output).
+Whether a given parameter achieves this is **parameter-specific, not provider-specific** — the same
+vendor both satisfies and breaks the axiom depending on which knob you set. Getting this right is a
+prescriptive contribution prior work lacks. This is a *sample*, not a complete characterization, and
+these APIs are volatile (each row cites the primary doc consulted):
 
-| Provider / mode | Cap parameter | Bounds reasoning tokens? | Cap axiom |
+| Provider / mode | Cap parameter | Bounds billed reasoning+output? | Cap axiom |
 |---|---|---|---|
-| **Anthropic** standard (`budget_tokens`†) / adaptive (effort, Opus 4.7+) | `max_tokens` | yes — thinking ⊆ `max_tokens`, billed as output | **holds** |
-| **Anthropic** interleaved thinking (beta) | `max_tokens` | **no** — budget may exceed `max_tokens` across blocks | **degrades** |
-| **OpenAI** Responses API | `max_output_tokens` | yes — caps reasoning+output combined | **holds** |
-| **Google** Gemini 2.5/3 | `maxOutputTokens` | yes — combined thinking+output budget | **holds** |
-| **Azure OpenAI** reasoning (o-series/GPT-5) | `max_completion_tokens` | **no** — caps visible output only; reasoning billed unbounded | **degrades** |
+| **OpenAI** Responses | `max_output_tokens` | **yes** — `reasoning_tokens ⊆ output_tokens`, bounded | **holds** |
+| **Azure/OpenAI** Chat, reasoning (o-series/GPT-5) | `max_completion_tokens` | **yes** — `reasoning_tokens ∈ completion_tokens_details`, capped¹ | **holds** |
+| **Anthropic** standard | `max_tokens` (with `budget_tokens < max_tokens`) | **yes** — `max_tokens` caps total output (thinking+text)² | **holds** |
+| **Anthropic** interleaved / adaptive thinking | `max_tokens` | **no** — "`budget_tokens` can exceed `max_tokens`… across all thinking blocks"² | **degrades** |
+| **Google** Gemini 2.5/3, thinking on | `maxOutputTokens` *alone* | **no** — thinking billed as output but governed by a *separate* `thinkingBudget`/`thinkingLevel`³ | **degrades** unless `thinkingBudget` is also pinned |
+| *any* reasoning model | legacy `max_tokens` | n/a — ignored/unsupported on o-series; must use the param above | **n/a (misconfig)** |
 
-† `budget_tokens` is deprecated for the newest Claude models in favor of adaptive/effort, but the
-axiom persists (thinking still counts within `max_tokens`). AWS Bedrock replicates Anthropic's
-behavior. **Corollary:** certify in **tokens/tool-calls** (stable) and map to dollars as a separate
-layer parameterized by the provider's billing semantics; the dollar bound is a guarantee only where
-the axiom holds (Anthropic standard/adaptive, OpenAI Responses, Gemini), degrading to a
-visible-output bound on Azure-reasoning / Anthropic-interleaved.
+¹ Azure Foundry "reasoning models" doc: reasoning tokens are part of `completion_tokens` and
+`max_completion_tokens` is the cap (Chat); `max_output_tokens` on Responses. ² Anthropic
+extended-thinking doc: standard requires `budget_tokens < max_tokens` and `max_tokens` limits total
+output; interleaved explicitly lifts this. ³ Gemini thinking doc: "response pricing is the sum of
+output tokens and thinking tokens"; thinking is steered by `thinkingBudget` (2.5) / `thinkingLevel`
+(3), distinct from `maxOutputTokens`. **The earlier intuition that *reasoning models* uniformly break
+the cap is wrong** — OpenAI/Azure reasoning *do* bound billed reasoning via the completion cap; what
+actually breaks it is (a) Anthropic interleaved/adaptive thinking, (b) Gemini with `maxOutputTokens`
+set but `thinkingBudget` unpinned, and (c) using a legacy/wrong parameter. **Corollary:** certify in
+**tokens/tool-calls** (stable) and map to dollars as a separate layer; the dollar bound is a
+guarantee exactly where the correct per-call parameter is pinned, and degrades on the three failure
+modes above.
 
 ## 4. Cost-soundness
 
@@ -239,6 +261,15 @@ the normal form `b_e` and raises, which is what the loop case of Lemma 2 needs.)
 - `delegate(q,e)→e, d=0`: `q⊢e:⋄;q′`, `p≥q+p′`; Lemma 1 raises child `q→p`: `p⊢e:⋄;p−q+q′`,
   `r=p−q+q′≥p−q≥p′`. ∎
 
+*Note on the `delegate` case (the `q′` slack).* The static rule **T-Del debits the parent's residual
+by the full `q`** — the parent declares the transfer lost irrevocably (the linear split). The
+operational step, however, **inlines `e` into the parent's single global gas counter** (there is no
+separate child process to "burn" its unused budget), so when we recompose, the child's unspent
+potential `q′` is still accounted. That is why `r = p−q+q′ ≥ p−q`. The invariant only needs `r ≥ p′`,
+so the `q′` slack is sound *over*-accounting, never double-spend. The Lean model is strictly more
+conservative: `pot (delegate q e) = q` unconditionally, never crediting `q′` back — so the mechanized
+bound is `q`, exactly the static debit, with no reliance on the recomposition slack.
+
 ### 4.4 Theorem (gas bound — a safety invariant on every reachable configuration)
 **For all `g₀`: if `p ⊢ e:⋄;_` and `⟨e,g₀⟩ →* ⟨e″,g⟩`, then `g−g₀ ≤ p`** (with `g₀=0`: `g ≤ p`).
 *Proof* by induction on the number `m` of steps. `m=0`: `0≤p`. `m→m+1`: `⟨e,g₀⟩→⟨e₁,g₁⟩→*⟨e″,g⟩`;
@@ -248,12 +279,14 @@ by Lemma 2, `d₁=g₁−g₀≤p` and `p−d₁⊢e₁:⋄;_`; by IH on the `m`
 This is a **safety property**: it holds at every reachable configuration `⟨e″,g⟩` and **its proof
 never appeals to termination** (it is the transitive lift of the per-step credit invariant
 `g + Φ` non-increasing, Lemma 2). The weak fragment is in fact strongly normalizing (§5), so no
-divergent trace exists *here* — but because the bound is termination-free, the **same invariant
-lifts unchanged to extensions with genuine non-termination** (e.g. fuel-free recursion), where it is
-the only thing standing between a workflow and unbounded spend. That is the point of proving it as
-an invariant rather than as a corollary of termination. The Lean theorem `steps_sound`
-(`Steps e 0 e′ g′ → WellTyped e → g′ ≤ pot e`) is exactly this statement, quantified over all
-reachable `⟨e′,g′⟩`.
+divergent trace exists *here*, and the Lean theorem quantifies over the (necessarily finite) `Steps`
+reachable from `⟨e,0⟩`. The payoff of proving a *termination-free* invariant — rather than deriving
+the bound as a corollary of termination — is methodological: the **same `g + Φ` argument would carry
+over** to an extension with genuine non-termination (e.g. fuel-free recursion), since it never uses
+strong normalization. We flag that this carry-over is an *observation about the technique*, **not a
+mechanized claim**: the Lean covers exactly this fragment. The theorem `steps_sound`
+(`Steps e 0 e′ g′ → WellTyped e → g′ ≤ pot e`) is the safety statement, quantified over all reachable
+`⟨e′,g′⟩`.
 
 ## 5. Progress, termination, and what the type adds over a runtime tracker
 
@@ -275,6 +308,15 @@ operational rule strictly decreases `(W,S)` lexicographically:
 
 So the fragment is strongly normalizing. ∎ **Progress.** Every typable `e≠skip` steps (by inversion:
 call/tool/if/loop/delegate have a rule; `e₁;e₂` reduces `e₁` or consumes a leading `skip`). ∎
+
+**What is and isn't mechanized.** Only §4 — the cost-soundness safety invariant — is machine-checked
+in Lean (`steps_sound`). The §5 results (this `(W,S)` strong-normalization argument and progress) are
+**pen-and-paper**, as are the relational↔functional equivalence (Lemma 0) and the §3.2 billing facts.
+Consequently the "*completes* within budget" upgrade (which needs strong normalization) is a paper
+guarantee resting on an unmechanized §5; the *mechanized* guarantee is the weaker, unconditional one:
+"never *spends* more than the declared potential." We state this split so no reader infers that the
+Lean covers more than the gas bound. Mechanizing §5 (and the equivalence) is immediate follow-on work
+but is not claimed here.
 
 A runtime budget with a kill-switch gives safety only — it aborts at meter `B`, after spending `B`,
 possibly mid-task. The type gives more, *ahead of time*:
