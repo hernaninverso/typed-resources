@@ -86,10 +86,11 @@ complementary to Khan's affine ownership discipline, and orthogonal to his open 
 2. **A machine-checked (Lean 4) cost-soundness theorem** (§4): well-typed ⟹ gas ≤ declared
    potential at every *reachable configuration* (hence every finite prefix of any trace), *under the
    cap axiom* (§3), proved as a termination-free safety invariant. *Scope of the mechanization, stated
-   plainly:* the Lean proves exactly `steps_sound` over the functional presentation `pot`+`WellTyped`
-   for the single-resource weak fragment; it does **not** mechanize the relational judgment of §4
-   (their equivalence, Lemma 0, is argued on paper), the strong-normalization/progress results of §5,
-   the multi-resource vector, the affine layer, or the §3.2 billing facts. The credit-invariant
+   plainly:* the Lean checks (i) `steps_sound` (the §4 bound), (ii) `hastype_iff_pot` (Lemma 0 — the
+   §3 relational rules equal `pot`+`WellTyped`), and (iii) `step_decreases` (every step strictly
+   decreases the §5 `(Wm,Sz)` measure). It does **not** mechanize the final well-foundedness step of
+   strong normalization, progress, the multi-resource vector, the affine layer, or the §3.2 billing
+   facts (these remain on paper). The credit-invariant
    technique itself is textbook AARA [Hofmann–Jost 2003], and AARA has been mechanized before (e.g.
    Carbonneaux–Hoffmann–Shao, certified resource bounds, 2015); **our novelty is not the proof technique but (i) its first
    machine-checked instantiation to the agent-workflow/per-call-cap setting and (ii) the billing
@@ -151,18 +152,23 @@ We write `e` *typable* iff `∃p,p′. p ⊢ e:⋄;p′`.
           ─────────────────────────             ─────────────────────────       to both branches
           p ⊢ e₁;e₂ : ⋄ ; p₂                    p ⊢ if e₁ e₂ : ⋄ ; min(p₁,p₂)
 
-(T-Loop)  p_b ⊢ e:⋄;p_b′   b := p_b − p_b′   p ≥ n·b + p′
-          ───────────────────────────────────────────────   -- fuel n literal. No fuel ⇒ no rule.
-          p ⊢ loop(n,e) : ⋄ ; p′
+(T-Loop)  p_b ⊢ e:⋄;p_b′   b := p_b − p_b′   p ≥ n·b
+          ──────────────────────────────────────────   -- fuel n literal. No fuel ⇒ no rule.
+          p ⊢ loop(n,e) : ⋄ ; p − n·b
 
-(T-Del)   q ⊢ e:⋄;q′    p ≥ q + p′
-          ────────────────────────              -- linear split: parent transfers q; conservative.
+(T-Del)   q ⊢ e:⋄;q′    p ≥ q
+          ────────────────────                  -- linear split: parent transfers q; conservative.
           p ⊢ delegate(q,e) : ⋄ ; p − q
 ```
-In T-If both branches are typed from the **same** input `p`; the residual is `min(p₁,p₂)` (worst
-residual) and, by Lemma 0, the cost is `b_{if} = max(b_{e₁}, b_{e₂})` (worst branch). The cost `b`
-in T-Loop is well-defined: Lemma 0(a) shows every typable `e` has a unique cost `b_e` independent of
-the incoming potential.
+**Every rule is *exact*: the residual is a deterministic function of the inputs, not a slack
+inequality.** (T-Call residual `p−c`, T-Skip `p`, T-Seq `p₂`, T-If `min(p₁,p₂)`, T-Loop `p−n·b`,
+T-Del `p−q`.) Exactness is what makes Lemma 0 hold; an earlier draft wrote T-Loop/T-Del with a free
+residual `p′` in the premise (`p ≥ n·b + p′`), which would have made `p−p′` ambiguous (e.g.
+`loop(0,e)` at `p=10` could derive any residual `0…10`) — that version is **wrong** and is corrected
+here. In T-If both branches are typed from the **same** input `p`; the residual is `min(p₁,p₂)`
+(worst residual) and the cost is `b_{if} = max(b_{e₁}, b_{e₂})` (worst branch). The cost `b` in
+T-Loop is well-defined because, with exact rules, every typable `e` has a unique cost `b_e = pot(e)`
+independent of the incoming potential (Lemma 0, now immediate by induction).
 
 ## 3. Instrumented semantics and the billing axiom
 
@@ -236,16 +242,23 @@ equivalence.
 If `p ⊢ e:⋄;p′` then `p+r ⊢ e:⋄;p′+r` for all `r ≥ 0`. *Proof:* induction on the derivation; each
 rule passes the extra `r` from incoming to residual. ∎
 
-### 4.2 Lemma 0 (cost invariance + normal form)
-**(a)** For every typable `e`, `p − p′` is the same in every typing `p ⊢ e:⋄;p′`; call it `b_e`.
-**(b)** `b_e ⊢ e:⋄;0` is derivable. **Cor.:** for all `x ≥ b_e`, `x ⊢ e:⋄;x − b_e`.
-*Proof of (a),(b) by structural induction.* `call(c)`: `b=c`; `c⊢call(c):⋄;0`. `skip`: `b=0`.
-`e₁;e₂`: `p−p₂=(p−p₁)+(p₁−p₂)=b₁+b₂`; normal form `b₁+b₂⊢e₁:⋄;b₂` (Lemma 1 on `b₁⊢e₁:⋄;0`),
-`b₂⊢e₂:⋄;0` (IH), T-Seq. `if e₁ e₂`: `p−min(p₁,p₂)=max(p−p₁,p−p₂)=max(b₁,b₂)`; normal form via Lemma 1
-then T-If with residual `min=0`. `loop(n,e)`: `b=n·b_body`; `n·b_body⊢loop(n,e):⋄;0`. `delegate(q,e)`:
-`b=q`; `q⊢delegate(q,e):⋄;0`. ∎
-*(`b_e` is fungible — independent of input. Lemma 1 cannot* lower *a derivation; one re-derives from
-the normal form `b_e` and raises, which is what the loop case of Lemma 2 needs.)*
+### 4.2 Lemma 0 (exact characterization — relational ⟺ functional)
+Define the closed-form potential `pot : Expr → ℕ` by `pot(skip)=0`, `pot(call c)=pot(tool c)=c`,
+`pot(e₁;e₂)=pot(e₁)+pot(e₂)`, `pot(if e₁ e₂)=max(pot e₁,pot e₂)`, `pot(loop(n,e))=n·pot(e)`,
+`pot(delegate(q,e))=q`. With the exact rules, the relational judgment is *completely determined* by it:
+**`p ⊢ e:⋄;p′` iff `p ≥ pot(e)` and `p′ = p − pot(e)`** (for well-typed `e`; well-typedness is the
+delegate side-condition `pot(child) ≤ q`).
+*Proof by structural induction on `e`.* `call(c)`/`tool(c)`: derivable iff `p ≥ c = pot`, residual
+`p − c`. `skip`: always, `pot=0`, residual `p`. `e₁;e₂`: by IH `p₁ = p − pot(e₁)` and (composing)
+`p₂ = p₁ − pot(e₂) = p − (pot e₁ + pot e₂) = p − pot(e₁;e₂)`, needing `p ≥ pot e₁` and `p₁ ≥ pot e₂`,
+i.e. `p ≥ pot(e₁;e₂)`. `if e₁ e₂`: same input `p`, residual `min(p−pot e₁, p−pot e₂) = p − max(…) =
+p − pot(if)`, needing `p ≥ max = pot(if)`. `loop(n,e)`: `b = pot(e)` by IH (unique!), residual
+`p − n·pot(e) = p − pot(loop)`, needing `p ≥ n·pot(e)`. `delegate(q,e)`: needs `q ≥ pot(e)` (child
+types) and `p ≥ q = pot(delegate)`, residual `p − q`. ∎
+**Corollary (cost is fungible):** `b_e := p − p′ = pot(e)`, independent of the incoming `p`. *This
+lemma is now **machine-checked**: `lean/TypedResources.lean` defines the relational `HasType` and
+proves `hastype_iff_pot : HasType p e p' ↔ (pot e ≤ p ∧ p' = p - pot e)`, closing the
+relational↔functional gap rather than leaving it on paper.*
 
 ### 4.3 Lemma 2 (one-step preservation, strengthened)
 **If `p ⊢ e:⋄;p′` and `⟨e,g⟩ → ⟨e′,g′⟩` with `d := g′−g`, then (i) `d ≤ p` and (ii) ∃`r ≥ p′` with
@@ -293,8 +306,9 @@ mechanized claim**: the Lean covers exactly this fragment. The theorem `steps_so
 **Measure for termination.** Use the lexicographic order on pairs `(W, S)`, where `W` is fuel-weighted
 work and `S` is syntactic size. Define `W(skip)=0`, `W(call(c))=W(tool(c))=1`, `W(e₁;e₂)=W(e₁)+W(e₂)`,
 `W(if e₁ e₂)=max(W(e₁),W(e₂))`, `W(delegate(q,e))=W(e)`, and `W(loop(n,e))=n·(W(e)+1)` (the `+1` per
-iteration is the unrolling overhead). `S(e)` is the number of AST nodes. **Lemma (decrease).** Every
-operational rule strictly decreases `(W,S)` lexicographically:
+iteration is the unrolling overhead). `S(e)` is the number of AST nodes (always `≥ 1`). **Lemma (decrease) — mechanized as `step_decreases`
+in Lean.** Every operational rule strictly decreases `(W,S)` lexicographically; the Lean proof checks
+all nine rule cases, so the informal reasoning below is backed by the machine, not just prose:
 - `call(c)→skip`: `W` drops `1→0`.
 - `loop(n+1,e)→e;loop(n,e)`: `W` drops by **exactly 1** — LHS `W=(n+1)(W(e)+1)`, RHS
   `W=W(e)+n(W(e)+1)`, so LHS−RHS `= 1`. The unfold **duplicates `e` syntactically, so `S` grows
@@ -306,17 +320,23 @@ operational rule strictly decreases `(W,S)` lexicographically:
   delegate step `W`-equal, `S`-down).
 - `e₁;e₂→e₁′;e₂` decreases `(W,S)` by IH on `e₁` (lifted through `W(e₁;e₂)=W(e₁)+W(e₂)`).
 
-So the fragment is strongly normalizing. ∎ **Progress.** Every typable `e≠skip` steps (by inversion:
+Since `<ₗₑₓ` on ℕ×ℕ is well-founded, the fragment is strongly normalizing. ∎ (`step_decreases`
+mechanizes the per-rule decrease; the well-foundedness step is standard.) **Progress.** Every typable
+`e≠skip` steps (by inversion:
 call/tool/if/loop/delegate have a rule; `e₁;e₂` reduces `e₁` or consumes a leading `skip`). ∎
 
-**What is and isn't mechanized.** Only §4 — the cost-soundness safety invariant — is machine-checked
-in Lean (`steps_sound`). The §5 results (this `(W,S)` strong-normalization argument and progress) are
-**pen-and-paper**, as are the relational↔functional equivalence (Lemma 0) and the §3.2 billing facts.
-Consequently the "*completes* within budget" upgrade (which needs strong normalization) is a paper
-guarantee resting on an unmechanized §5; the *mechanized* guarantee is the weaker, unconditional one:
-"never *spends* more than the declared potential." We state this split so no reader infers that the
-Lean covers more than the gas bound. Mechanizing §5 (and the equivalence) is immediate follow-on work
-but is not claimed here.
+**What is and isn't mechanized.** Machine-checked in `lean/TypedResources.lean`: (1) the §4
+cost-soundness safety invariant `steps_sound`; (2) **Lemma 0** — the relational↔functional equivalence
+`hastype_iff_pot : HasType p e p' ↔ (WellTyped e ∧ pot e ≤ p ∧ p' = p − pot e)`, so the bridge from
+the §3 typing rules to `pot` is no longer on paper; (3) **the §5 termination measure**
+`step_decreases : Step e g e' g' → Lex e' e`, i.e. every operational step strictly decreases the
+lexicographic `(Wm, Sz)` — the load-bearing content of strong normalization. `steps_sound` and
+`hastype_iff_pot` use only `[propext, Quot.sound]` (constructive); `step_decreases` additionally uses
+`Classical.choice`. Still **pen-and-paper**: the final step from `step_decreases` to "no infinite
+reduction" (standard well-foundedness of `<ₗₑₓ` on ℕ×ℕ), progress, the multi-resource vector, the
+affine layer, and the §3.2 billing facts. So the "*completes* within budget" upgrade now rests on a
+mechanized measure-decrease plus a standard well-foundedness step; the headline *mechanized* guarantee
+remains the safety bound "never *spends* more than the declared potential."
 
 A runtime budget with a kill-switch gives safety only — it aborts at meter `B`, after spending `B`,
 possibly mid-task. The type gives more, *ahead of time*:

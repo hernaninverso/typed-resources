@@ -20,6 +20,17 @@ Supporting lemmas:
   increases `gas + pot` (the AARA potential invariant).
 - `steps_credit` — the same invariant lifted to the reflexive–transitive closure.
 
+Also mechanized (added in response to the multi-model audit):
+- `hastype_iff_pot : HasType p e p' ↔ (WellTyped e ∧ pot e ≤ p ∧ p' = p - pot e)` — **Lemma 0**: the
+  exact relational typing judgment (`HasType`, the §3 rules written with deterministic residuals)
+  coincides with the closed-form `pot`. This closes the paper's relational↔functional gap, which a
+  reviewer flagged as a potential hole. Proved via `hastype_sound` (→) and `hastype_complete` (←).
+- `step_decreases : Step e g e' g' → Lex e' e` — **§5 termination**: every operational step strictly
+  decreases the lexicographic measure `(Wm, Sz)` (`Lex`). This refutes the objection that the measure
+  fails to decrease on some rule (e.g. `loop` unfolding duplicates the body, growing `Sz`, but `Wm`
+  strictly drops, so the pair decreases). Well-foundedness of `<ₗₑₓ` on ℕ×ℕ then gives SN (standard,
+  not re-proved here).
+
 ## Build / verify
 
 ```

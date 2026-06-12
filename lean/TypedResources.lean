@@ -110,6 +110,143 @@ theorem steps_sound {e e' g'} (h : Steps e 0 e' g') (wt : WellTyped e) : g' ≤ 
   have h2 : g' + pot e' ≤ 0 + pot e := inv.2
   omega
 
+/-! ### Relational typing judgment and its equivalence to `pot` (mechanizes Lemma 0).
+    The §3 typing rules, written EXACTLY (deterministic residual, no slack). We prove the relational
+    judgment is completely determined by `pot`+`WellTyped`, closing the relational↔functional gap. -/
+
+/-- Exact relational typing `p ⊢ e : ⋄ ; p'` (incoming `p`, residual `p'`). -/
+inductive HasType : Nat → Expr → Nat → Prop where
+  | skip   {p}                              : HasType p skip p
+  | call   {p c} (h : c ≤ p)                : HasType p (call c) (p - c)
+  | tool   {p c} (h : c ≤ p)                : HasType p (tool c) (p - c)
+  | seq    {p e₁ e₂ p₁ p₂} : HasType p e₁ p₁ → HasType p₁ e₂ p₂ → HasType p (seq e₁ e₂) p₂
+  | branch {p e₁ e₂ p₁ p₂} : HasType p e₁ p₁ → HasType p e₂ p₂ → HasType p (branch e₁ e₂) (Nat.min p₁ p₂)
+  | loop   {p n e} (hbody : HasType (pot e) e 0) (h : n * pot e ≤ p) : HasType p (loop n e) (p - n * pot e)
+  | deleg  {p q e q'} (hbody : HasType q e q') (h : q ≤ p) : HasType p (deleg q e) (p - q)
+
+/-- Soundness of the relational rules: a derivation pins `WellTyped`, the bound, and the residual. -/
+theorem hastype_sound {p e p'} (h : HasType p e p') :
+    WellTyped e ∧ pot e ≤ p ∧ p' = p - pot e := by
+  induction h with
+  | @skip p => exact ⟨trivial, by simp [pot], by simp [pot]⟩
+  | @call p c hc => exact ⟨trivial, by simpa [pot] using hc, by simp [pot]⟩
+  | @tool p c hc => exact ⟨trivial, by simpa [pot] using hc, by simp [pot]⟩
+  | @seq p e₁ e₂ p₁ p₂ _ _ ih₁ ih₂ =>
+      obtain ⟨w₁, b₁, r₁⟩ := ih₁; obtain ⟨w₂, b₂, r₂⟩ := ih₂
+      refine ⟨⟨w₁, w₂⟩, ?_, ?_⟩ <;> simp only [pot] <;> omega
+  | @branch p e₁ e₂ p₁ p₂ _ _ ih₁ ih₂ =>
+      obtain ⟨w₁, b₁, rfl⟩ := ih₁; obtain ⟨w₂, b₂, rfl⟩ := ih₂
+      refine ⟨⟨w₁, w₂⟩, ?_, ?_⟩
+      · simp only [pot, Nat.max_def]; split <;> omega
+      · simp only [pot, Nat.min_def, Nat.max_def]; split <;> split <;> omega
+  | @loop p n e hbody h ihbody =>
+      obtain ⟨w, _, _⟩ := ihbody
+      exact ⟨w, by simpa [pot] using h, by simp [pot]⟩
+  | @deleg p q e q' hbody h ihbody =>
+      obtain ⟨w, b, _⟩ := ihbody
+      exact ⟨⟨b, w⟩, by simpa [pot] using h, by simp [pot]⟩
+
+/-- Completeness: every well-typed `e` with enough potential has a (unique) derivation. -/
+theorem hastype_complete : ∀ {e p}, WellTyped e → pot e ≤ p → HasType p e (p - pot e) := by
+  intro e
+  induction e with
+  | skip => intro p _ _; simpa [pot] using HasType.skip (p := p)
+  | call c => intro p _ hb; simpa [pot] using HasType.call (p := p) (c := c) (by simpa [pot] using hb)
+  | tool c => intro p _ hb; simpa [pot] using HasType.tool (p := p) (c := c) (by simpa [pot] using hb)
+  | seq a b iha ihb =>
+      intro p wt hb
+      obtain ⟨wa, wb⟩ := wt
+      have hba : pot a ≤ p := by simp only [pot] at hb; omega
+      have hbb : pot b ≤ p - pot a := by simp only [pot] at hb; omega
+      have da := iha wa hba
+      have db := ihb wb hbb
+      have : HasType p (seq a b) (p - pot a - pot b) := HasType.seq da db
+      simpa [pot, Nat.sub_sub] using this
+  | branch a b iha ihb =>
+      intro p wt hb
+      obtain ⟨wa, wb⟩ := wt
+      have hbm : Nat.max (pot a) (pot b) ≤ p := by simpa [pot] using hb
+      have hba : pot a ≤ p := Nat.le_trans (Nat.le_max_left _ _) hbm
+      have hbb : pot b ≤ p := Nat.le_trans (Nat.le_max_right _ _) hbm
+      have da := iha wa hba
+      have db := ihb wb hbb
+      have hmin : Nat.min (p - pot a) (p - pot b) = p - pot (branch a b) := by
+        simp only [pot, Nat.min_def, Nat.max_def]; split <;> split <;> omega
+      have : HasType p (branch a b) (Nat.min (p - pot a) (p - pot b)) := HasType.branch da db
+      rwa [hmin] at this
+  | loop n e ih =>
+      intro p wt hb
+      have hbody : HasType (pot e) e 0 := by
+        have := ih wt (Nat.le_refl _); simpa using this
+      have hb' : n * pot e ≤ p := by simpa [pot] using hb
+      simpa [pot] using HasType.loop hbody hb'
+  | deleg q e ih =>
+      intro p wt hb
+      obtain ⟨hq, we⟩ := wt
+      have hbody : HasType q e (q - pot e) := ih we hq
+      have hb' : q ≤ p := by simpa [pot] using hb
+      simpa [pot] using HasType.deleg hbody hb'
+
+/-- **Lemma 0, mechanized.** The relational judgment is exactly `pot`+`WellTyped`. -/
+theorem hastype_iff_pot {p e p'} :
+    HasType p e p' ↔ (WellTyped e ∧ pot e ≤ p ∧ p' = p - pot e) := by
+  constructor
+  · exact hastype_sound
+  · rintro ⟨wt, hb, rfl⟩; exact hastype_complete wt hb
+
+/-! ### Strong normalization: a lexicographic measure that strictly decreases on every step.
+    This mechanizes §5 and refutes the objection that `(W,S)` fails to decrease on some rule. -/
+
+/-- Fuel-weighted work. -/
+def Wm : Expr → Nat
+  | skip => 0
+  | call _ => 1
+  | tool _ => 1
+  | seq a b => Wm a + Wm b
+  | branch a b => Nat.max (Wm a) (Wm b)
+  | loop n e => n * (Wm e + 1)
+  | deleg _ e => Wm e
+
+/-- Syntactic size. -/
+def Sz : Expr → Nat
+  | skip => 1
+  | call _ => 1
+  | tool _ => 1
+  | seq a b => 1 + Sz a + Sz b
+  | branch a b => 1 + Sz a + Sz b
+  | loop _ e => 1 + Sz e
+  | deleg _ e => 1 + Sz e
+
+/-- Lexicographic order on `(Wm, Sz)`. -/
+def Lex (e' e : Expr) : Prop := Wm e' < Wm e ∨ (Wm e' = Wm e ∧ Sz e' < Sz e)
+
+/-- Every expression has size ≥ 1 (needed for the `loop 0 → skip` size drop). -/
+theorem Sz_pos (e : Expr) : 0 < Sz e := by
+  induction e <;> simp only [Sz] <;> omega
+
+/-- **Every operational step strictly decreases `(Wm, Sz)` lexicographically.** Hence the relation is
+    contained in the inverse image of `<ₗₑₓ` on `ℕ×ℕ` (well-founded), so the fragment is strongly
+    normalizing — the §5 claim, mechanized. -/
+theorem step_decreases {e g e' g'} (h : Step e g e' g') : Lex e' e := by
+  induction h with
+  | call => left; simp [Wm]
+  | tool => left; simp [Wm]
+  | @seqL a a' b g g' _ ih =>
+      rcases ih with hW | ⟨hWe, hSe⟩
+      · left; simp only [Wm]; omega
+      · right; constructor
+        · simp only [Wm]; omega
+        · simp only [Sz]; omega
+  | seqSkip => right; refine ⟨?_, ?_⟩ <;> simp [Wm, Sz]
+  | @brL a b g => simp only [Lex, Wm, Sz, Nat.max_def]; split <;> omega
+  | @brR a b g => simp only [Lex, Wm, Sz, Nat.max_def]; split <;> omega
+  | @loopUnfold n e g =>
+      left
+      have key : (n + 1) * (Wm e + 1) = n * (Wm e + 1) + (Wm e + 1) := by rw [Nat.add_mul, Nat.one_mul]
+      simp only [Wm]; omega
+  | @loopZero e g => right; refine ⟨by simp [Wm], ?_⟩; simp only [Sz]; have := Sz_pos e; omega
+  | deleg => right; refine ⟨?_, ?_⟩ <;> simp [Wm, Sz]
+
 /-! ### Sanity instances (compile-time checks of the headline numbers, by pure computation). -/
 
 /-- The fuel-free runaway loop is NOT expressible: every `loop` carries fuel, so it cannot even
